@@ -534,6 +534,14 @@ middleware {
 }
 ```
 
+## 相关链接
+
+- **GitHub 仓库**: https://github.com/YuukiKazuto/kratosgin
+- **Kratos 框架**: https://github.com/go-kratos/kratos
+- **Gin 框架**: https://github.com/gin-gonic/gin
+- **Cobra 命令行库**: https://github.com/spf13/cobra
+- **go-zero 框架**: https://github.com/zeromicro/go-zero
+
 ## 许可证
 
 MIT License
