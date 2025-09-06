@@ -1,0 +1,24 @@
+package {{.Options.PackageName}}
+
+import (
+	"context"
+	"github.com/gin-gonic/gin"
+)
+
+// context 存取
+type ginContextKey struct{}
+
+// GinContextKey 用于从标准上下文中获取 *gin.Context
+var GinContextKey = ginContextKey{}
+
+// SaveToContext 将 gin.Context 存入标准上下文
+func SaveToContext(ctx context.Context, gc *gin.Context) context.Context {
+	return context.WithValue(ctx, GinContextKey, gc)
+}
+
+// FromContext 从标准上下文获取 gin.Context
+func FromContext(ctx context.Context) (*gin.Context, bool) {
+	gc, ok := ctx.Value(GinContextKey).(*gin.Context)
+	return gc, ok
+}
+

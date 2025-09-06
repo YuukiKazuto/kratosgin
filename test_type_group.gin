@@ -1,0 +1,63 @@
+info {
+    title: "测试类型组语法"
+    version: "v1.0.0"
+    desc: "测试 type ( ) 格式的语法支持"
+}
+
+options {
+    outputDir: "."
+    packageName: "v1"
+}
+
+// 测试 type ( ) 格式
+type (
+    UserRequest {
+        ID       int64  `json:"id" binding:"required"`
+        Username string `json:"username" binding:"required"`
+    }
+    
+    UserResponse {
+        ID       int64  `json:"id"`
+        Username string `json:"username"`
+        Email    string `json:"email"`
+    }
+    
+    ProductRequest {
+        Name  string  `json:"name" binding:"required"`
+        Price float64 `json:"price" binding:"required,min=0"`
+    }
+    
+    ProductResponse {
+        ID    int64   `json:"id"`
+        Name  string  `json:"name"`
+        Price float64 `json:"price"`
+    }
+)
+
+// 原有的单个类型定义格式（保持兼容）
+type LoginRequest {
+    Username string `json:"username" binding:"required"`
+    Password string `json:"password" binding:"required"`
+}
+
+type LoginResponse {
+    Token string `json:"token"`
+    User  User   `json:"user"`
+}
+
+type User {
+    ID       int64  `json:"id"`
+    Username string `json:"username"`
+    Email    string `json:"email"`
+}
+
+service UserService {
+    @getUser    GET  /api/v1/user/:id UserRequest UserResponse
+    @createUser POST /api/v1/user UserRequest UserResponse
+    @login      POST /api/v1/login LoginRequest LoginResponse
+}
+
+service ProductService {
+    @getProduct    GET  /api/v1/product/:id ProductRequest ProductResponse
+    @createProduct POST /api/v1/product ProductRequest ProductResponse
+}

@@ -1,0 +1,38 @@
+options {
+    packageName: v1
+    outputDir: api/{{.Name}}/v1
+}
+
+// 类型定义
+type {{.NameTitle}}Request struct {
+    ID   int64  `json:"id"` // ID
+    Name string `json:"name"` // 名称
+}
+
+type {{.NameTitle}}Response struct {
+    ID   int64  `json:"id"` // ID
+    Name string `json:"name"` // 名称
+}
+
+type Get{{.NameTitle}}Request struct {
+    ID int64 `json:"id"` // ID
+}
+
+type Get{{.NameTitle}}Response struct {
+    ID   int64  `json:"id"` // ID
+    Name string `json:"name"` // 名称
+}
+
+// 服务定义
+service {{.ServiceName}} {
+    // 直接路由（不在组内）
+    @get{{.NameTitle}} get /{{.Name}}/:id Get{{.NameTitle}}Request Get{{.NameTitle}}Response // 获取{{.Name}}信息
+    
+    // 路由分组
+    group @admin /v1/admin {
+        middleware: ["auth", "admin"]
+        @create{{.NameTitle}} post /{{.Name}} WithGinContext {{.NameTitle}}Request {{.NameTitle}}Response // 创建{{.Name}}
+        @update{{.NameTitle}} put /{{.Name}}/:id WithGinContext {{.NameTitle}}Request {{.NameTitle}}Response // 更新{{.Name}}
+        @delete{{.NameTitle}} delete /{{.Name}}/:id WithGinContext {{.NameTitle}}Request {{.NameTitle}}Response // 删除{{.Name}}
+    }
+}

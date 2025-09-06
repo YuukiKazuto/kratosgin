@@ -1,0 +1,11 @@
+package {{.Options.PackageName}}
+
+import "context"
+
+{{range .Services}}
+// {{.Name}} 服务接口
+type {{.Name}} interface {
+{{range .Methods}}	{{.Name}}(ctx context.Context, req *{{.Request}}) (*{{.Response}}, error)
+{{end}}{{range .RouteGroups}}{{range .Methods}}	{{.Name}}(ctx context.Context, req *{{.Request}}) (*{{.Response}}, error)
+{{end}}{{end}}}
+{{end}}

@@ -1,0 +1,20 @@
+package {{.Options.PackageName}}
+
+import (
+	"net/http"
+	"github.com/gin-gonic/gin"
+	"github.com/go-kratos/kratos/v2/log"
+	kgin "github.com/go-kratos/gin"
+)
+
+{{range .Services}}{{. | generateServiceHandlerWithGroups}}{{end}}
+
+{{range .RouteGroups}}{{. | generateRouteGroupHandler}}{{end}}
+
+{{if .StandaloneRoutes}}{{.StandaloneRoutes | generateStandaloneRoutesHandler}}{{end}}
+
+// ErrorBadRequest 创建错误响应
+func ErrorBadRequest(message string) error {
+	return kgin.NewError(http.StatusBadRequest, message)
+}
+
