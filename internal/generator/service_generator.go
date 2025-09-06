@@ -73,18 +73,27 @@ func (g *CodeGenerator) generateSingleServiceImplementation(service parser.Servi
 
 	// 构造函数
 	content.WriteString(fmt.Sprintf("// New%s 创建 %s 服务\n", service.Name, service.Name))
-	content.WriteString(fmt.Sprintf("func New%s(logger log.Logger) *%s {\n", service.Name, service.Name))
+	content.WriteString(fmt.Sprintf("func New%s(logger log.Logger) %s.%s {\n", service.Name, packageAlias, service.Name))
 	content.WriteString(fmt.Sprintf("\treturn &%s{\n", service.Name))
 	content.WriteString("\t\tlog: log.NewHelper(logger),\n")
 	content.WriteString("\t}\n")
 	content.WriteString("}\n\n")
 
+	// 收集所有方法（包括直接方法和路由分组中的方法）
+	allMethods := make([]parser.Method, 0)
+	allMethods = append(allMethods, service.Methods...)
+	for _, group := range service.RouteGroups {
+		allMethods = append(allMethods, group.Methods...)
+	}
+
 	// 生成方法实现
-	for _, method := range service.Methods {
-		content.WriteString(fmt.Sprintf("// %s %s\n", strings.Title(method.Name), method.Description))
+	for _, method := range allMethods {
+		// 将方法名转换为导出的形式（首字母大写）
+		exportedMethodName := strings.Title(method.Name)
+		content.WriteString(fmt.Sprintf("// %s %s\n", exportedMethodName, method.Description))
 		content.WriteString(fmt.Sprintf("func (s *%s) %s(ctx context.Context, req *%s.%s) (*%s.%s, error) {\n",
-			service.Name, strings.Title(method.Name), packageAlias, method.Request, packageAlias, method.Response))
-		content.WriteString(fmt.Sprintf("\ts.log.Infof(\"调用 %s 方法\")\n", strings.Title(method.Name)))
+			service.Name, exportedMethodName, packageAlias, method.Request, packageAlias, method.Response))
+		content.WriteString(fmt.Sprintf("\ts.log.Infof(\"调用 %s 方法\")\n", exportedMethodName))
 		content.WriteString("\t\n")
 		content.WriteString("\t// TODO: 实现具体的业务逻辑\n")
 		content.WriteString(fmt.Sprintf("\tresp := &%s.%s{}\n", packageAlias, method.Response))

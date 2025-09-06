@@ -87,7 +87,15 @@ func (g *CodeGenerator) generateMiddlewareFile(outputDir string, middlewareNames
 	file.WriteString("package middleware\n\n")
 
 	// 生成导入
-	file.WriteString("import \"github.com/gin-gonic/gin\"\n\n")
+	file.WriteString("import (\n")
+	file.WriteString("\t\"github.com/gin-gonic/gin\"\n")
+
+	// 导入 API 包
+	moduleName := g.inferModuleName()
+	apiPath, packageName := g.inferAPIPathAndPackage()
+	packageAlias := g.generatePackageAlias(apiPath, packageName)
+	file.WriteString(fmt.Sprintf("\t%s \"%s/api/%s/%s\"\n", packageAlias, moduleName, apiPath, packageName))
+	file.WriteString(")\n\n")
 
 	// 生成中间件结构体
 	middlewareStructName := serviceName + "Middleware"
@@ -95,7 +103,7 @@ func (g *CodeGenerator) generateMiddlewareFile(outputDir string, middlewareNames
 	file.WriteString("}\n\n")
 
 	// 生成构造函数
-	file.WriteString(fmt.Sprintf("func New%s() *%s {\n", middlewareStructName, middlewareStructName))
+	file.WriteString(fmt.Sprintf("func New%s() %s.Middleware {\n", middlewareStructName, packageAlias))
 	file.WriteString(fmt.Sprintf("\treturn &%s{}\n", middlewareStructName))
 	file.WriteString("}\n\n")
 

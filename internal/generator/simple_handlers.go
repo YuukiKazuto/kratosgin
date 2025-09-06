@@ -176,7 +176,7 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 		} else {
 			result.WriteString("\tctx := c.Request.Context()\n")
 		}
-		result.WriteString(fmt.Sprintf("\tresp, err := h.%s.%s(ctx, req)\n", service.Name, method.Name))
+		result.WriteString(fmt.Sprintf("\tresp, err := h.%s.%s(ctx, req)\n", service.Name, strings.Title(method.Name)))
 		result.WriteString("\tif err != nil {\n")
 		result.WriteString("\t\tkgin.Error(c, err)\n")
 		result.WriteString("\t\treturn\n")
