@@ -103,7 +103,12 @@ func (g *CodeGenerator) generateSingleServiceImplementation(service parser.Servi
 	}
 
 	// 写入文件
-	filename := fmt.Sprintf("%s.go", strings.ToLower(service.Name))
+	// 去掉 Service 后缀
+	serviceName := service.Name
+	if strings.HasSuffix(serviceName, "Service") {
+		serviceName = strings.TrimSuffix(serviceName, "Service")
+	}
+	filename := fmt.Sprintf("%s.go", strings.ToLower(serviceName))
 	filepath := filepath.Join(outputDir, filename)
 
 	// 检查文件是否已存在

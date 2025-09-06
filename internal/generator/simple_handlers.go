@@ -24,7 +24,6 @@ func (g *CodeGenerator) generateHTTPHandlers() error {
 	// 生成包声明和导入
 	fmt.Fprintf(file, "package %s\n\n", g.template.Options.PackageName)
 	fmt.Fprintf(file, "import (\n")
-	fmt.Fprintf(file, "\t\"fmt\"\n")
 	fmt.Fprintf(file, "\t\"net/http\"\n")
 	fmt.Fprintf(file, "\t\"github.com/gin-gonic/gin\"\n")
 	fmt.Fprintf(file, "\t\"github.com/go-kratos/kratos/v2/log\"\n")
@@ -45,12 +44,6 @@ func (g *CodeGenerator) generateHTTPHandlers() error {
 	if len(g.template.StandaloneRoutes) > 0 {
 		fmt.Fprint(file, g.generateStandaloneRoutesHandler(g.template.StandaloneRoutes))
 	}
-
-	// 生成错误处理函数
-	fmt.Fprintf(file, "// ErrorBadRequest 创建错误响应\n")
-	fmt.Fprintf(file, "func ErrorBadRequest(message string) error {\n")
-	fmt.Fprintf(file, "\treturn fmt.Errorf(message)\n")
-	fmt.Fprintf(file, "}\n")
 
 	return nil
 }
@@ -166,7 +159,9 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 		result.WriteString(fmt.Sprintf("\treq := &%s{}\n", method.Request))
 		result.WriteString("\tif err := c.ShouldBind(req); err != nil {\n")
 		result.WriteString(fmt.Sprintf("\t\th.log.Errorw(\"Struct\", \"%sHandler\", \"method\", \"%s\", \"error\", err)\n", service.Name, method.Name))
-		result.WriteString("\t\tkgin.Error(c, ErrorBadRequest(err.Error()))\n")
+		result.WriteString("\t\tc.JSON(http.StatusBadRequest, gin.H{\n")
+		result.WriteString("\t\t\t\"message\": err.Error(),\n")
+		result.WriteString("\t\t})\n")
 		result.WriteString("\t\treturn\n")
 		result.WriteString("\t}\n\n")
 
@@ -281,7 +276,9 @@ func (g *CodeGenerator) generateRouteGroupHandler(group parser.RouteGroup) strin
 		result.WriteString(fmt.Sprintf("\treq := &%s{}\n", method.Request))
 		result.WriteString("\tif err := c.ShouldBind(req); err != nil {\n")
 		result.WriteString(fmt.Sprintf("\t\th.log.Errorw(\"Struct\", \"%sHandler\", \"method\", \"%s\", \"error\", err)\n", group.Name, method.Name))
-		result.WriteString("\t\tkgin.Error(c, ErrorBadRequest(err.Error()))\n")
+		result.WriteString("\t\tc.JSON(http.StatusBadRequest, gin.H{\n")
+		result.WriteString("\t\t\t\"message\": err.Error(),\n")
+		result.WriteString("\t\t})\n")
 		result.WriteString("\t\treturn\n")
 		result.WriteString("\t}\n\n")
 
@@ -343,7 +340,9 @@ func (g *CodeGenerator) generateStandaloneRoutesHandler(routes []parser.Standalo
 		result.WriteString(fmt.Sprintf("\treq := &%s{}\n", route.Request))
 		result.WriteString("\tif err := c.ShouldBind(req); err != nil {\n")
 		result.WriteString(fmt.Sprintf("\t\th.log.Errorw(\"Struct\", \"StandaloneHandler\", \"method\", \"%s\", \"error\", err)\n", route.Name))
-		result.WriteString("\t\tkgin.Error(c, ErrorBadRequest(err.Error()))\n")
+		result.WriteString("\t\tc.JSON(http.StatusBadRequest, gin.H{\n")
+		result.WriteString("\t\t\t\"message\": err.Error(),\n")
+		result.WriteString("\t\t})\n")
 		result.WriteString("\t\treturn\n")
 		result.WriteString("\t}\n\n")
 

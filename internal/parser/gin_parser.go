@@ -391,7 +391,8 @@ func parseOptions(lines []string, start int, options *Options) error {
 func parseField(line string) (Field, error) {
 	// 解析字段格式: name type `tag` // comment
 	// 支持数组类型如 []User, map[string]interface{} 等
-	re := regexp.MustCompile(`(\w+)\s+([\w\[\]{}.,]+)\s+` + "`([^`]*)`" + `\s*(?://\s*(.*))?`)
+	// 支持指针类型如 *User 等
+	re := regexp.MustCompile(`(\w+)\s+([\w\[\]{}.,*]+)\s+` + "`([^`]*)`" + `\s*(?://\s*(.*))?`)
 	matches := re.FindStringSubmatch(line)
 	if len(matches) < 4 {
 		return Field{}, fmt.Errorf("invalid field format: %s", line)
