@@ -1,0 +1,15 @@
+package v1
+
+import "context"
+
+// UserService 服务接口
+type UserService interface {
+	GetUser(ctx context.Context, req *UserReq) (*UserResp, error)
+	CreateUser(ctx context.Context, req *CreateUserReq) (*CreateUserResp, error)
+	UpdateUser(ctx context.Context, req *UpdateUserReq) (*UpdateUserResp, error)
+	DeleteUser(ctx context.Context, req *UserReq) (*UserResp, error)
+	GetAllUsers(ctx context.Context, req *UserReq) (*UserResp, error)
+	BulkDeleteUsers(ctx context.Context, req *UserReq) (*UserResp, error)
+	GetPublicUser(ctx context.Context, req *UserReq) (*UserResp, error)
+	SearchUsers(ctx context.Context, req *UserReq) (*UserResp, error)
+}

@@ -18,6 +18,7 @@ func init() {
 	// 添加子命令
 	rootCmd.AddCommand(cli.GenCommand())
 	rootCmd.AddCommand(cli.NewCommand())
+	rootCmd.AddCommand(cli.FormatCommand())
 }
 
 func main() {

@@ -1,0 +1,70 @@
+options {
+	packageName: v1
+	outputDir: api/user/v1
+}
+type (
+	UserReq {
+		ID int `json:"id" binding:"required,min=1"`
+		Name string `json:"name" binding:"required"`
+		Email string `json:"email" binding:"required,email"`
+	}
+	
+	UserResp {
+		ID int `json:"id"`
+		Name string `json:"name"`
+		Email string `json:"email"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+	}
+	
+	CreateUserReq {
+		Name string `json:"name" binding:"required"`
+		Email string `json:"email" binding:"required,email"`
+		Password string `json:"password" binding:"required,min=6"`
+	}
+	
+	CreateUserResp {
+		ID int `json:"id"`
+		Name string `json:"name"`
+		Email string `json:"email"`
+		CreatedAt string `json:"created_at"`
+	}
+	
+	UpdateUserReq {
+		ID int `json:"id" binding:"required,min=1"`
+		Name string `json:"name"`
+		Email string `json:"email" binding:"email"`
+	}
+	
+	UpdateUserResp {
+		ID int `json:"id"`
+		Name string `json:"name"`
+		Email string `json:"email"`
+		UpdatedAt string `json:"updated_at"`
+	}
+)
+type User struct {
+	ID int `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
+	Password string `json:"-"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+service UserService prefix v1 {
+	middleware: ["auth", "logging"]
+	
+	@GetUser GET /users/:id UserReq UserResp
+	@CreateUser POST /users CreateUserReq CreateUserResp
+	@UpdateUser PUT /users/:id UpdateUserReq UpdateUserResp
+	@DeleteUser DELETE /users/:id UserReq UserResp
+	group @admin /admin {
+		middleware: ["admin"]
+		@GetAllUsers GET /users UserReq UserResp
+		@BulkDeleteUsers DELETE /users UserReq UserResp
+	}
+	group @public /public {
+		@GetPublicUser GET /users/:id UserReq UserResp
+		@SearchUsers GET /users/search UserReq UserResp
+	}
+}

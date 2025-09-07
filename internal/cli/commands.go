@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/YuukiKazuto/kratosgin/internal/formatter"
 	"github.com/YuukiKazuto/kratosgin/internal/generator"
 	"github.com/YuukiKazuto/kratosgin/internal/parser"
 	"github.com/YuukiKazuto/kratosgin/internal/templates"
@@ -62,6 +63,15 @@ func runGen(templateFile, serviceOutputDir, middlewareOutputDir string) {
 	// 检查文件是否存在
 	if _, err := os.Stat(templateFile); os.IsNotExist(err) {
 		log.Fatalf("模板文件不存在: %s", templateFile)
+	}
+
+	// 在生成之前自动格式化 gin 文件
+	if strings.HasSuffix(templateFile, ".gin") {
+		fmt.Printf("正在格式化 gin 文件: %s\n", templateFile)
+		if err := formatter.FormatGinFileWithBackup(templateFile); err != nil {
+			log.Fatalf("格式化 gin 文件失败: %v", err)
+		}
+		fmt.Printf("gin 文件格式化完成\n")
 	}
 
 	// 读取文件内容
@@ -140,4 +150,45 @@ func runNew(name, outputPath string) {
 	}
 
 	fmt.Printf("模板文件创建成功: %s\n", filename)
+}
+
+// FormatCommand 格式化命令
+func FormatCommand() *cobra.Command {
+	var (
+		filePath string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "format",
+		Short: "格式化 gin 文件",
+		Long:  "格式化 .gin 文件，整理缩进、空格等格式问题",
+		Run: func(cmd *cobra.Command, args []string) {
+			runFormat(filePath)
+		},
+	}
+
+	cmd.Flags().StringVarP(&filePath, "file", "f", "", "要格式化的 .gin 文件路径")
+	cmd.MarkFlagRequired("file")
+
+	return cmd
+}
+
+// runFormat 执行格式化命令
+func runFormat(filePath string) {
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		log.Fatalf("文件不存在: %s", filePath)
+	}
+
+	// 检查文件扩展名
+	if !strings.HasSuffix(filePath, ".gin") {
+		log.Fatalf("文件必须是 .gin 扩展名: %s", filePath)
+	}
+
+	// 格式化文件
+	if err := formatter.FormatGinFileWithBackup(filePath); err != nil {
+		log.Fatalf("格式化文件失败: %v", err)
+	}
+
+	fmt.Printf("文件格式化成功: %s\n", filePath)
 }

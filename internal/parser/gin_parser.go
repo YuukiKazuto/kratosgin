@@ -133,6 +133,10 @@ func ParseGinTemplate(content string) (*GinTemplate, error) {
 				}
 				// 跳过已解析的行
 				i = nextIndex
+				// 确保状态正确
+				inType = false
+				inTypeGroup = false
+				currentType = nil
 				continue
 			}
 
