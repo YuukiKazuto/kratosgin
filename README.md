@@ -24,7 +24,7 @@
 ### 1. 安装命令行工具
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@latest
+go install github.com/YuukiKazuto/kratosgin@v0.3.0
 ```
 
 ### 2. 创建模板文件
@@ -61,7 +61,7 @@ kratosgin gen -f user.gin -s internal/service -m internal/middleware
 ### 安装
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@latest
+go install github.com/YuukiKazuto/kratosgin@v0.3.0
 ```
 
 ### 命令说明
