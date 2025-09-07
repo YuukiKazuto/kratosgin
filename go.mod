@@ -2,6 +2,8 @@ module github.com/YuukiKazuto/kratosgin
 
 go 1.21
 
+retract v0.3.0
+
 require github.com/spf13/cobra v1.10.1
 
 require (
