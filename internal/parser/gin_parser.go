@@ -41,6 +41,8 @@ type Field struct {
 // Service 表示服务定义
 type Service struct {
 	Name        string
+	Prefix      string   // 服务前缀，如 v1, v2 等
+	Middleware  []string // 服务级别中间件
 	Methods     []Method
 	RouteGroups []RouteGroup
 }
@@ -150,10 +152,27 @@ func ParseGinTemplate(content string) (*GinTemplate, error) {
 
 		// 解析 service 定义
 		if strings.HasPrefix(line, "service ") {
-			serviceName := strings.TrimSpace(strings.TrimPrefix(line, "service "))
+			serviceLine := strings.TrimSpace(strings.TrimPrefix(line, "service "))
 			// 移除可能的大括号
-			serviceName = strings.TrimSpace(strings.Trim(serviceName, "{}"))
-			currentService = &Service{Name: serviceName, Methods: make([]Method, 0)}
+			serviceLine = strings.TrimSpace(strings.Trim(serviceLine, "{}"))
+
+			// 解析服务名和可选的 prefix
+			parts := strings.Fields(serviceLine)
+			serviceName := parts[0]
+			prefix := ""
+
+			// 检查是否有 prefix 参数
+			if len(parts) >= 3 && parts[1] == "prefix" {
+				prefix = parts[2]
+			}
+
+			currentService = &Service{
+				Name:        serviceName,
+				Prefix:      prefix,
+				Middleware:  make([]string, 0),
+				Methods:     make([]Method, 0),
+				RouteGroups: make([]RouteGroup, 0),
+			}
 			template.Services = append(template.Services, *currentService)
 			inType = false
 			inTypeGroup = false
@@ -235,6 +254,33 @@ func ParseGinTemplate(content string) (*GinTemplate, error) {
 			continue
 		}
 
+		// 解析服务级别中间件
+		if currentService != nil && currentRouteGroup == nil && strings.HasPrefix(line, "middleware:") {
+			middlewareStr := strings.TrimSpace(strings.TrimPrefix(line, "middleware:"))
+			middlewareStr = strings.TrimSpace(strings.Trim(middlewareStr, "[]"))
+			if middlewareStr != "" {
+				middlewareParts := strings.Split(middlewareStr, ",")
+				for _, part := range middlewareParts {
+					// 忽略 // 后面的注释内容
+					if commentIndex := strings.Index(part, "//"); commentIndex != -1 {
+						part = part[:commentIndex]
+					}
+					part = strings.TrimSpace(strings.Trim(part, `"'`))
+					// 过滤中文注释和空字符串
+					if part != "" && !strings.Contains(part, "只包含") {
+						// 更新当前服务的中间件
+						for i, s := range template.Services {
+							if s.Name == currentService.Name {
+								template.Services[i].Middleware = append(template.Services[i].Middleware, part)
+								break
+							}
+						}
+					}
+				}
+			}
+			continue
+		}
+
 		// 解析路由分组中间件
 		if currentRouteGroup != nil && strings.HasPrefix(line, "middleware:") {
 			middlewareStr := strings.TrimSpace(strings.TrimPrefix(line, "middleware:"))
@@ -242,8 +288,13 @@ func ParseGinTemplate(content string) (*GinTemplate, error) {
 			if middlewareStr != "" {
 				middlewareParts := strings.Split(middlewareStr, ",")
 				for _, part := range middlewareParts {
+					// 忽略 // 后面的注释内容
+					if commentIndex := strings.Index(part, "//"); commentIndex != -1 {
+						part = part[:commentIndex]
+					}
 					part = strings.TrimSpace(strings.Trim(part, `"'`))
-					if part != "" {
+					// 过滤中文注释和空字符串
+					if part != "" && !strings.Contains(part, "只包含") {
 						// 更新当前路由分组的中间件
 						if currentService != nil {
 							// 在服务内部的分组

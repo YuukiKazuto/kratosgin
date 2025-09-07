@@ -10,6 +10,10 @@
 - 📦 **自动生成**: 自动生成类型定义、服务接口、HTTP 处理器等代码
 - 🏗️ **Kratos 集成**: 完美集成 Kratos 框架的 HTTP 服务器
 - 📁 **智能路径**: 自动从文件路径推断输出目录和包名
+- 🎨 **服务前缀**: 支持服务级别的前缀设置，自动生成版本化路由组
+- 🔐 **服务级中间件**: 支持服务级别的中间件配置，避免重复应用
+- 🗂️ **路由组嵌套**: 支持路由组的嵌套结构，自动处理中间件继承
+- 📂 **灵活输出**: 支持指定输出路径，智能检测版本和包名
 
 
 ## 快速开始
@@ -23,8 +27,14 @@ go install github.com/YuukiKazuto/kratosgin@latest
 ### 2. 创建模板文件
 
 ```bash
-# 创建 user.gin 模板文件
+# 在当前目录创建 user.gin 模板文件
 kratosgin new user
+
+# 在指定目录创建模板文件
+kratosgin new product -o api/product/v2
+
+# 在指定路径创建模板文件
+kratosgin new category -o api/category/v1/category.gin
 ```
 
 ### 3. 生成代码
@@ -82,20 +92,29 @@ kratosgin gen -f api/user/v1/user.gin -s internal/service -m internal/middleware
 #### `kratosgin new` - 创建模板
 
 ```bash
-kratosgin new <name>
+kratosgin new <name> [flags]
 ```
 
 **参数：**
 - `name`: 模板名称，会生成 `{name}.gin` 文件
+- `-o, --output string`: 指定输出路径（可选）
 
 **示例：**
 ```bash
-# 创建 user.gin 模板文件
+# 在当前目录创建 user.gin 模板文件
 kratosgin new user
 
-# 创建 product.gin 模板文件
-kratosgin new product
+# 在指定目录创建模板文件
+kratosgin new product -o api/product/v2
+
+# 在指定路径创建模板文件
+kratosgin new category -o api/category/v1/category.gin
 ```
+
+**智能路径检测：**
+- 工具会自动检测目录结构中的版本号（如 v1, v2, v3）
+- 自动设置正确的包名和输出目录
+- 支持相对路径和绝对路径
 
 ## Gin 文件语法
 
@@ -196,27 +215,53 @@ type (
 - 如需使用复杂嵌套结构，请先定义独立的类型，然后引用该类型
 
 #### 4. service 定义
-定义服务接口和路由：
+定义服务接口和路由，支持服务前缀和服务级中间件：
+
+**基本语法：**
 ```gin
-service UserService {
-    // 普通方法：@方法名 HTTP方法 路径 请求类型 响应类型
-    @getUser GET /api/v1/user/:id GetUserRequest GetUserResponse
+service ServiceName ?prefix version {
+    middleware: ["middleware1", "middleware2"]  // 服务级中间件（可选）
     
-    // 带 Gin Context 的方法：@方法名 HTTP方法 路径 WithGinContext 请求类型 响应类型
-    @createUser POST /api/v1/user WithGinContext CreateUserRequest CreateUserResponse
+    // 直接路由（不在组内）
+    @methodName HTTP_METHOD /path RequestType ResponseType // 方法注释
     
-    // 路由组：@组名 HTTP方法 路径 请求类型 响应类型
-    @admin {
-        @getUsers GET /api/v1/admin/users GetUsersRequest GetUsersResponse
-        @deleteUser DELETE /api/v1/admin/user/:id DeleteUserRequest DeleteUserResponse
+    // 路由分组
+    group @groupName /group/path {
+        middleware: ["groupMiddleware"]  // 组级中间件（可选）
+        @methodName HTTP_METHOD /path RequestType ResponseType
     }
 }
 ```
 
-**方法定义格式：**
-- **普通方法**: `@方法名 HTTP方法 路径 请求类型 响应类型`
+**完整示例：**
+```gin
+service UserService ?prefix v1 {
+    middleware: ["auth", "logging"]  // 服务级中间件，应用到所有路由
+    
+    // 直接路由
+    @getUser GET /user/:id GetUserRequest GetUserResponse
+    
+    // 路由分组
+    group @admin /admin {
+        middleware: ["admin"]  // 组级中间件，只包含 admin（auth 和 logging 已在服务级应用）
+        @createUser POST /user CreateUserRequest CreateUserResponse
+        @updateUser PUT /user/:id UpdateUserRequest UpdateUserResponse
+    }
+    
+    group @public /public {
+        // 没有组级中间件，只继承服务级的 auth 和 logging
+        @getPublicUser GET /user/:id GetUserRequest GetUserResponse
+    }
+}
+```
+
+**语法说明：**
+- **服务前缀**: `?prefix version` 可选，如 `?prefix v1`、`?prefix v2`
+- **服务级中间件**: `middleware: ["auth", "logging"]` 应用到所有路由
+- **路由组**: `group @groupName /group/path { ... }` 定义嵌套路由组
+- **组级中间件**: 避免重复应用服务级中间件，只添加额外的中间件
+- **方法定义**: `@方法名 HTTP方法 路径 请求类型 响应类型`
 - **带 Gin Context**: `@方法名 HTTP方法 路径 WithGinContext 请求类型 响应类型`
-- **路由组**: 使用 `@组名 { ... }` 定义一组相关路由
 
 #### 5. middleware 定义
 定义中间件：
@@ -280,7 +325,7 @@ type UserRequest {
 
 ### Service 实现
 
-当使用 `-s` 参数时，工具会生成 Service 实现模板：
+当使用 `-s` 参数时，工具会生成 Service 实现模板，构造函数返回接口类型：
 
 ```go
 package service
@@ -296,49 +341,49 @@ type UserService struct {
     log *log.Helper
 }
 
-func NewUserService(logger log.Logger) *UserService {
+// NewUserService 创建 UserService 服务，返回接口类型
+func NewUserService(logger log.Logger) userV1.UserService {
     return &UserService{
         log: log.NewHelper(logger),
     }
 }
 
-func (s *UserService) Login(ctx context.Context, req *userV1.LoginRequest) (*userV1.LoginResponse, error) {
-    // 实现登录逻辑
-    return &userV1.LoginResponse{
-        Token: "jwt_token",
-        User:  &userV1.User{ID: 1, Username: req.Username},
-    }, nil
-}
-
-func (s *UserService) Register(ctx context.Context, req *userV1.LoginRequest) (*userV1.LoginResponse, error) {
-    // 实现注册逻辑
-    return &userV1.LoginResponse{
-        Token: "jwt_token",
-        User:  &userV1.User{ID: 2, Username: req.Username},
-    }, nil
-}
-
 func (s *UserService) GetUser(ctx context.Context, req *userV1.GetUserRequest) (*userV1.GetUserResponse, error) {
-    // 实现获取用户逻辑
-    return &userV1.GetUserResponse{
-        User: &userV1.User{ID: req.ID, Username: "test"},
-    }, nil
+    s.log.Infof("调用 GetUser 方法")
+    
+    // TODO: 实现具体的业务逻辑
+    resp := &userV1.GetUserResponse{}
+    
+    return resp, nil
+}
+
+func (s *UserService) CreateUser(ctx context.Context, req *userV1.CreateUserRequest) (*userV1.CreateUserResponse, error) {
+    s.log.Infof("调用 CreateUser 方法")
+    
+    // TODO: 实现具体的业务逻辑
+    resp := &userV1.CreateUserResponse{}
+    
+    return resp, nil
 }
 ```
 
 ### Middleware 实现
 
-当使用 `-m` 参数时，工具会生成 Middleware 实现模板：
+当使用 `-m` 参数时，工具会生成 Middleware 实现模板，构造函数返回接口类型：
 
 ```go
 package middleware
 
-import "github.com/gin-gonic/gin"
+import (
+    "github.com/gin-gonic/gin"
+    userV1 "your-project/api/user/v1"
+)
 
 type UserMiddleware struct {
 }
 
-func NewUserMiddleware() *UserMiddleware {
+// NewUserMiddleware 创建 UserMiddleware，返回接口类型
+func NewUserMiddleware() userV1.Middleware {
     return &UserMiddleware{}
 }
 
@@ -354,6 +399,57 @@ func (m *UserMiddleware) Admin() gin.HandlerFunc {
         // 实现管理员权限检查逻辑
         c.Next()
     }
+}
+
+func (m *UserMiddleware) Logging() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        // 实现日志记录逻辑
+        c.Next()
+    }
+}
+```
+
+### 生成的路由结构
+
+基于服务前缀和中间件配置，工具会生成相应的路由结构：
+
+**有前缀的服务（prefix v1）：**
+```go
+// RegisterRoutes 注册路由
+func (h *UserServiceHandler) RegisterRoutes(r *gin.Engine) {
+	PrefixGroup := r.Group("/v1")  // 服务前缀作为顶级路由组
+	{
+		PrefixGroup.Use(h.middleware.Auth())    // 服务级中间件
+		PrefixGroup.Use(h.middleware.Logging()) // 服务级中间件
+		PrefixGroup.GET("/user/:id", h.getUser) // 直接路由
+
+		AdminGroup := PrefixGroup.Group("/admin") // 嵌套路由组
+		{
+			AdminGroup.Use(h.middleware.Admin()) // 组级中间件（避免重复）
+			AdminGroup.POST("/user", h.createUser)
+		}
+
+		PublicGroup := PrefixGroup.Group("/public") // 嵌套路由组
+		{
+			// 没有组级中间件，只继承服务级中间件
+			PublicGroup.GET("/user/:id", h.getPublicUser)
+		}
+	}
+}
+```
+
+**无前缀的服务：**
+```go
+// RegisterRoutes 注册路由
+func (h *OrderServiceHandler) RegisterRoutes(r *gin.Engine) {
+	r.Use(h.middleware.Cors())     // 服务级中间件直接应用到根路由
+	r.Use(h.middleware.RateLimit()) // 服务级中间件直接应用到根路由
+	r.GET("/order/:id", h.getOrder) // 直接路由
+
+	ApiGroup := r.Group("/api") // 路由组
+	{
+		ApiGroup.POST("/order", h.createOrder)
+	}
 }
 ```
 
@@ -513,29 +609,131 @@ type (
     }
 )
 
-// 用户服务
-service UserService {
-    @createUser POST /api/v1/users WithGinContext CreateUserRequest CreateUserResponse
-    @getUser    GET  /api/v1/users/:id GetUserRequest GetUserResponse
+// 用户服务（带前缀和服务级中间件）
+service UserService ?prefix v1 {
+    middleware: ["auth", "logging"]  // 服务级中间件
+    
+    // 直接路由
+    @getUser GET /user/:id GetUserRequest GetUserResponse
+    
+    // 路由分组
+    group @admin /admin {
+        middleware: ["admin"]  // 组级中间件
+        @createUser POST /user WithGinContext CreateUserRequest CreateUserResponse
+        @updateUser PUT /user/:id UpdateUserRequest UpdateUserResponse
+    }
+    
+    group @public /public {
+        // 没有组级中间件，只继承服务级中间件
+        @getPublicUser GET /user/:id GetUserRequest GetUserResponse
+    }
 }
 
-// 商品服务
+// 商品服务（无前缀）
 service ProductService {
-    @createProduct POST /api/v1/products CreateProductRequest CreateProductResponse
-    @getProduct    GET  /api/v1/products/:id GetProductRequest GetProductResponse
+    middleware: ["cors", "rateLimit"]  // 服务级中间件
     
-    // 管理员路由组
-    @admin {
-        @deleteProduct DELETE /api/v1/admin/products/:id GetProductRequest GetProductResponse
+    // 直接路由
+    @getProduct GET /product/:id GetProductRequest GetProductResponse
+    
+    // 路由分组
+    group @api /api {
+        middleware: ["apiKey"]  // 组级中间件
+        @createProduct POST /product CreateProductRequest CreateProductResponse
+        @updateProduct PUT /product/:id UpdateProductRequest UpdateProductResponse
     }
 }
 
 // 中间件定义
 middleware {
-    Auth    // 认证中间件
-    Admin   // 管理员权限中间件
-    Logging // 日志中间件
+    Auth     // 认证中间件
+    Admin    // 管理员权限中间件
+    Logging  // 日志中间件
+    Cors     // CORS 中间件
+    RateLimit // 限流中间件
+    ApiKey   // API Key 中间件
 }
+```
+
+**生成的路由结构：**
+
+用户服务会生成以下路由：
+- `GET /v1/user/:id` (应用 auth, logging 中间件)
+- `POST /v1/admin/user` (应用 auth, logging, admin 中间件)
+- `PUT /v1/admin/user/:id` (应用 auth, logging, admin 中间件)
+- `GET /v1/public/user/:id` (应用 auth, logging 中间件)
+
+商品服务会生成以下路由：
+- `GET /product/:id` (应用 cors, rateLimit 中间件)
+- `POST /api/product` (应用 cors, rateLimit, apiKey 中间件)
+- `PUT /api/product/:id` (应用 cors, rateLimit, apiKey 中间件)
+
+## 新功能使用场景
+
+### 1. 版本化 API 管理
+
+使用服务前缀可以轻松管理不同版本的 API：
+
+```gin
+// v1 版本
+service UserService ?prefix v1 {
+    middleware: ["auth"]
+    @getUser GET /user/:id GetUserRequest GetUserResponse
+}
+
+// v2 版本
+service UserService ?prefix v2 {
+    middleware: ["auth", "logging"]
+    @getUser GET /user/:id GetUserRequestV2 GetUserResponseV2
+}
+```
+
+### 2. 服务级中间件管理
+
+通过服务级中间件，可以统一管理整个服务的通用中间件：
+
+```gin
+service ApiService ?prefix v1 {
+    middleware: ["cors", "rateLimit", "logging"]  // 所有路由都会应用这些中间件
+    
+    group @public /public {
+        // 公共接口，只继承服务级中间件
+        @health GET /health HealthRequest HealthResponse
+    }
+    
+    group @admin /admin {
+        middleware: ["admin"]  // 只添加 admin 中间件
+        @createUser POST /user CreateUserRequest CreateUserResponse
+    }
+}
+```
+
+### 3. 智能路径检测
+
+工具会自动检测目录结构并设置正确的包名和输出目录：
+
+```bash
+# 在 v1 目录下创建模板
+cd api/user/v1
+kratosgin new user
+# 自动设置 packageName: v1, outputDir: api/user/v1
+
+# 在 v2 目录下创建模板
+cd api/user/v2
+kratosgin new user
+# 自动设置 packageName: v2, outputDir: api/user/v2
+```
+
+### 4. 灵活的输出路径
+
+支持指定输出路径，适应不同的项目结构：
+
+```bash
+# 在指定目录创建
+kratosgin new product -o api/product/v2
+
+# 在指定路径创建
+kratosgin new category -o api/category/v1/category.gin
 ```
 
 ## 相关链接

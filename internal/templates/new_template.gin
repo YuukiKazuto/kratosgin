@@ -1,6 +1,6 @@
 options {
-    packageName: v1
-    outputDir: api/{{.Name}}/v1
+    packageName: {{.PackageName}}
+    outputDir: {{.OutputDir}}
 }
 
 // 类型定义
@@ -24,7 +24,8 @@ type Get{{.NameTitle}}Response struct {
 }
 
 // 服务定义
-service {{.ServiceName}} {
+service {{.ServiceName}} prefix {{.PackageName}} {
+    middleware: ["auth"]
     // 直接路由（不在组内）
     @get{{.NameTitle}} get /{{.Name}}/:id Get{{.NameTitle}}Request Get{{.NameTitle}}Response // 获取{{.Name}}信息
     

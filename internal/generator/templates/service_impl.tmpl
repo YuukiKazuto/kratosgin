@@ -1,0 +1,31 @@
+package service
+
+import (
+	"context"
+	
+	"github.com/go-kratos/kratos/v2/log"
+	{{.PackageAlias}} "{{.ModuleName}}/api/{{.APIPath}}/{{.PackageName}}"
+)
+
+// {{.ServiceName}} {{.ServiceName}} 服务实现
+type {{.ServiceName}} struct {
+	log *log.Helper
+}
+
+// New{{.ServiceName}} 创建 {{.ServiceName}} 服务
+func New{{.ServiceName}}(logger log.Logger) {{.PackageAlias}}.{{.ServiceName}} {
+	return &{{.ServiceName}}{
+		log: log.NewHelper(logger),
+	}
+}
+
+{{range .Methods}}
+func (s *{{$.ServiceName}}) {{.Name | title}}(ctx context.Context, req *{{$.PackageAlias}}.{{.Request}}) (*{{$.PackageAlias}}.{{.Response}}, error) {
+	s.log.Infof("调用 {{.Name | title}} 方法")
+	
+	// TODO: 实现具体的业务逻辑
+	resp := &{{$.PackageAlias}}.{{.Response}}{}
+	
+	return resp, nil
+}
+{{end}}

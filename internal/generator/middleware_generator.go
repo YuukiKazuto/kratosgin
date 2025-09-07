@@ -1,11 +1,16 @@
 package generator
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 )
+
+//go:embed templates/middleware.tmpl
+var middlewareTemplate string
 
 // generateMiddlewareImplementations 生成中间件实现
 func (g *CodeGenerator) generateMiddlewareImplementations() error {
@@ -39,18 +44,59 @@ func (g *CodeGenerator) generateMiddlewareImplementations() error {
 	// 收集所有中间件名称
 	middlewareNames := make(map[string]bool)
 	for _, service := range g.template.Services {
+		// 收集服务级中间件
+		for _, middleware := range service.Middleware {
+			cleanMiddleware := strings.Trim(middleware, `"'`)
+			if cleanMiddleware != "" {
+				middlewareNames[cleanMiddleware] = true
+			}
+		}
+		// 收集路由组中间件
 		for _, group := range service.RouteGroups {
 			for _, middleware := range group.Middleware {
-				middlewareNames[middleware] = true
+				cleanMiddleware := strings.Trim(middleware, `"'`)
+				if cleanMiddleware != "" {
+					middlewareNames[cleanMiddleware] = true
+				}
 			}
 		}
 	}
 
-	// 生成中间件实现
-	if len(middlewareNames) > 0 {
-		if err := g.generateMiddlewareFile(absoluteMiddlewareDir, middlewareNames); err != nil {
-			return fmt.Errorf("生成中间件文件失败: %w", err)
+	// 如果没有中间件定义，删除已存在的中间件文件
+	if len(middlewareNames) == 0 {
+		if err := g.deleteExistingMiddlewareFiles(absoluteMiddlewareDir); err != nil {
+			return fmt.Errorf("删除中间件文件失败: %w", err)
 		}
+		return nil
+	}
+
+	// 生成中间件实现
+	if err := g.generateMiddlewareFile(absoluteMiddlewareDir, middlewareNames); err != nil {
+		return fmt.Errorf("生成中间件文件失败: %w", err)
+	}
+
+	return nil
+}
+
+// deleteExistingMiddlewareFiles 删除已存在的中间件文件
+func (g *CodeGenerator) deleteExistingMiddlewareFiles(middlewareDir string) error {
+	// 获取服务名称用于确定要删除的文件名
+	serviceName := "User" // 默认值
+	if len(g.template.Services) > 0 {
+		serviceName = g.template.Services[0].Name
+		// 移除 Service 后缀
+		serviceName = strings.TrimSuffix(serviceName, "Service")
+	}
+
+	filename := strings.ToLower(serviceName) + ".go"
+	filepath := filepath.Join(middlewareDir, filename)
+
+	// 检查文件是否存在，如果存在则删除
+	if _, err := os.Stat(filepath); err == nil {
+		if err := os.Remove(filepath); err != nil {
+			return fmt.Errorf("删除中间件文件失败: %w", err)
+		}
+		fmt.Printf("已删除中间件文件: %s\n", filepath)
 	}
 
 	return nil
@@ -63,9 +109,8 @@ func (g *CodeGenerator) generateMiddlewareFile(outputDir string, middlewareNames
 	if len(g.template.Services) > 0 {
 		serviceName = g.template.Services[0].Name
 		// 移除 Service 后缀
-		if strings.HasSuffix(serviceName, "Service") {
-			serviceName = strings.TrimSuffix(serviceName, "Service")
-		}
+		serviceName = strings.TrimSuffix(serviceName, "Service")
+
 	}
 
 	filename := strings.ToLower(serviceName) + ".go"
@@ -77,48 +122,48 @@ func (g *CodeGenerator) generateMiddlewareFile(outputDir string, middlewareNames
 		return nil
 	}
 
+	// 准备模板数据
+	moduleName := g.inferModuleName()
+	apiPath, packageName := g.inferAPIPathAndPackage()
+	packageAlias := g.generatePackageAlias(apiPath, packageName)
+
+	var middlewareNamesList []string
+	for middlewareName := range middlewareNames {
+		cleanName := strings.Trim(middlewareName, `"'`)
+		if cleanName != "" {
+			middlewareNamesList = append(middlewareNamesList, cleanName)
+		}
+	}
+
+	templateData := struct {
+		ServiceName     string
+		ModuleName      string
+		APIPath         string
+		PackageName     string
+		PackageAlias    string
+		MiddlewareNames []string
+	}{
+		ServiceName:     serviceName,
+		ModuleName:      moduleName,
+		APIPath:         apiPath,
+		PackageName:     packageName,
+		PackageAlias:    packageAlias,
+		MiddlewareNames: middlewareNamesList,
+	}
+
+	// 使用模板生成文件
+	t, err := template.New("middleware.tmpl").Funcs(template.FuncMap{
+		"title": strings.Title,
+	}).Parse(middlewareTemplate)
+	if err != nil {
+		return err
+	}
+
 	file, err := os.Create(filepath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// 生成包声明
-	file.WriteString("package middleware\n\n")
-
-	// 生成导入
-	file.WriteString("import (\n")
-	file.WriteString("\t\"github.com/gin-gonic/gin\"\n")
-
-	// 导入 API 包
-	moduleName := g.inferModuleName()
-	apiPath, packageName := g.inferAPIPathAndPackage()
-	packageAlias := g.generatePackageAlias(apiPath, packageName)
-	file.WriteString(fmt.Sprintf("\t%s \"%s/api/%s/%s\"\n", packageAlias, moduleName, apiPath, packageName))
-	file.WriteString(")\n\n")
-
-	// 生成中间件结构体
-	middlewareStructName := serviceName + "Middleware"
-	file.WriteString(fmt.Sprintf("type %s struct {\n", middlewareStructName))
-	file.WriteString("}\n\n")
-
-	// 生成构造函数
-	file.WriteString(fmt.Sprintf("func New%s() %s.Middleware {\n", middlewareStructName, packageAlias))
-	file.WriteString(fmt.Sprintf("\treturn &%s{}\n", middlewareStructName))
-	file.WriteString("}\n\n")
-
-	// 生成中间件方法
-	for middlewareName := range middlewareNames {
-		// 清理中间件名称中的引号
-		cleanName := strings.Trim(middlewareName, `"'`)
-		titleName := strings.Title(cleanName)
-		file.WriteString(fmt.Sprintf("func (m *%s) %s() gin.HandlerFunc {\n", middlewareStructName, titleName))
-		file.WriteString("\treturn func(c *gin.Context) {\n")
-		file.WriteString(fmt.Sprintf("\t\t// TODO: 实现 %s 中间件逻辑\n", titleName))
-		file.WriteString("\t\tc.Next()\n")
-		file.WriteString("\t}\n")
-		file.WriteString("}\n\n")
-	}
-
-	return nil
+	return t.Execute(file, templateData)
 }

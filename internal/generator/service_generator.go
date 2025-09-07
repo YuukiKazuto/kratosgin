@@ -1,13 +1,18 @@
 package generator
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/YuukiKazuto/kratosgin/internal/parser"
 )
+
+//go:embed templates/service_impl.tmpl
+var serviceImplTemplate string
 
 // generateServiceImplementations 生成 service 实现
 func (g *CodeGenerator) generateServiceImplementations() error {
@@ -47,37 +52,10 @@ func (g *CodeGenerator) generateServiceImplementations() error {
 
 // generateSingleServiceImplementation 生成单个服务的实现
 func (g *CodeGenerator) generateSingleServiceImplementation(service parser.Service, outputDir string) error {
-	var content strings.Builder
-
-	// 包声明
-	content.WriteString("package service\n\n")
-
-	// 导入
-	content.WriteString("import (\n")
-	content.WriteString("\t\"context\"\n")
-	content.WriteString("\t\n")
-	content.WriteString("\t\"github.com/go-kratos/kratos/v2/log\"\n")
-
-	// 导入 API 包
+	// 准备模板数据
 	moduleName := g.inferModuleName()
 	apiPath, packageName := g.inferAPIPathAndPackage()
 	packageAlias := g.generatePackageAlias(apiPath, packageName)
-	content.WriteString(fmt.Sprintf("\t%s \"%s/api/%s/%s\"\n", packageAlias, moduleName, apiPath, packageName))
-	content.WriteString(")\n\n")
-
-	// 生成服务实现结构体
-	content.WriteString(fmt.Sprintf("// %s %s 服务实现\n", service.Name, service.Name))
-	content.WriteString(fmt.Sprintf("type %s struct {\n", service.Name))
-	content.WriteString("\tlog *log.Helper\n")
-	content.WriteString("}\n\n")
-
-	// 构造函数
-	content.WriteString(fmt.Sprintf("// New%s 创建 %s 服务\n", service.Name, service.Name))
-	content.WriteString(fmt.Sprintf("func New%s(logger log.Logger) %s.%s {\n", service.Name, packageAlias, service.Name))
-	content.WriteString(fmt.Sprintf("\treturn &%s{\n", service.Name))
-	content.WriteString("\t\tlog: log.NewHelper(logger),\n")
-	content.WriteString("\t}\n")
-	content.WriteString("}\n\n")
 
 	// 收集所有方法（包括直接方法和路由分组中的方法）
 	allMethods := make([]parser.Method, 0)
@@ -86,28 +64,34 @@ func (g *CodeGenerator) generateSingleServiceImplementation(service parser.Servi
 		allMethods = append(allMethods, group.Methods...)
 	}
 
-	// 生成方法实现
-	for _, method := range allMethods {
-		// 将方法名转换为导出的形式（首字母大写）
-		exportedMethodName := strings.Title(method.Name)
-		content.WriteString(fmt.Sprintf("// %s %s\n", exportedMethodName, method.Description))
-		content.WriteString(fmt.Sprintf("func (s *%s) %s(ctx context.Context, req *%s.%s) (*%s.%s, error) {\n",
-			service.Name, exportedMethodName, packageAlias, method.Request, packageAlias, method.Response))
-		content.WriteString(fmt.Sprintf("\ts.log.Infof(\"调用 %s 方法\")\n", exportedMethodName))
-		content.WriteString("\t\n")
-		content.WriteString("\t// TODO: 实现具体的业务逻辑\n")
-		content.WriteString(fmt.Sprintf("\tresp := &%s.%s{}\n", packageAlias, method.Response))
-		content.WriteString("\t\n")
-		content.WriteString("\treturn resp, nil\n")
-		content.WriteString("}\n\n")
+	templateData := struct {
+		ServiceName  string
+		ModuleName   string
+		APIPath      string
+		PackageName  string
+		PackageAlias string
+		Methods      []parser.Method
+	}{
+		ServiceName:  service.Name,
+		ModuleName:   moduleName,
+		APIPath:      apiPath,
+		PackageName:  packageName,
+		PackageAlias: packageAlias,
+		Methods:      allMethods,
+	}
+
+	// 使用模板生成文件
+	t, err := template.New("service_impl.tmpl").Funcs(template.FuncMap{
+		"title": strings.Title,
+	}).Parse(serviceImplTemplate)
+	if err != nil {
+		return err
 	}
 
 	// 写入文件
 	// 去掉 Service 后缀
 	serviceName := service.Name
-	if strings.HasSuffix(serviceName, "Service") {
-		serviceName = strings.TrimSuffix(serviceName, "Service")
-	}
+	serviceName = strings.TrimSuffix(serviceName, "Service")
 	filename := fmt.Sprintf("%s.go", strings.ToLower(serviceName))
 	filepath := filepath.Join(outputDir, filename)
 
@@ -123,8 +107,7 @@ func (g *CodeGenerator) generateSingleServiceImplementation(service parser.Servi
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(content.String())
-	return err
+	return t.Execute(file, templateData)
 }
 
 // inferAPIPathAndPackage 推断 API 路径和包名

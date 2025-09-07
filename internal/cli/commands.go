@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/YuukiKazuto/kratosgin/internal/generator"
 	"github.com/YuukiKazuto/kratosgin/internal/parser"
@@ -38,15 +40,19 @@ func GenCommand() *cobra.Command {
 
 // NewCommand 新建命令
 func NewCommand() *cobra.Command {
+	var outputPath string
+
 	cmd := &cobra.Command{
 		Use:   "new [name]",
 		Short: "创建新的 .gin 模板文件",
 		Long:  "创建一个新的 .gin 模板文件，包含基本的服务定义和示例接口",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			runNew(args[0])
+			runNew(args[0], outputPath)
 		},
 	}
+
+	cmd.Flags().StringVarP(&outputPath, "output", "o", "", "指定输出路径（可选）")
 
 	return cmd
 }
@@ -94,14 +100,41 @@ func runGen(templateFile, serviceOutputDir, middlewareOutputDir string) {
 }
 
 // runNew 执行新建命令
-func runNew(name string) {
-	templateContent, err := templates.ProcessNewTemplate(name)
+func runNew(name, outputPath string) {
+	var templateContent string
+	var err error
+
+	if outputPath != "" {
+		// 如果指定了输出路径，使用带路径的模板处理
+		templateContent, err = templates.ProcessNewTemplateWithPath(name, outputPath)
+	} else {
+		// 默认使用当前目录的模板处理
+		templateContent, err = templates.ProcessNewTemplate(name)
+	}
+
 	if err != nil {
 		log.Fatalf("生成模板内容失败: %v", err)
 	}
 
+	// 确定输出路径
+	var filename string
+	if outputPath != "" {
+		// 如果指定了输出路径，使用指定的路径
+		if strings.HasSuffix(outputPath, ".gin") {
+			filename = outputPath
+		} else {
+			// 如果路径是目录，在目录下创建文件
+			if err := os.MkdirAll(outputPath, 0755); err != nil {
+				log.Fatalf("创建目录失败: %v", err)
+			}
+			filename = filepath.Join(outputPath, name+".gin")
+		}
+	} else {
+		// 默认在当前目录创建
+		filename = name + ".gin"
+	}
+
 	// 创建模板文件
-	filename := name + ".gin"
 	if err := os.WriteFile(filename, []byte(templateContent), 0644); err != nil {
 		log.Fatalf("创建模板文件失败: %v", err)
 	}

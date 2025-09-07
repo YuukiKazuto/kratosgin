@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/YuukiKazuto/kratosgin/internal/parser"
 )
@@ -15,54 +16,53 @@ var handlersTemplate string
 
 // generateHTTPHandlers 生成 HTTP 处理器
 func (g *CodeGenerator) generateHTTPHandlers() error {
+	t, err := template.New("handlers.tmpl").Funcs(template.FuncMap{
+		"generateServiceHandlerWithGroups": g.generateServiceHandlerWithGroups,
+		"generateRouteGroupHandler":        g.generateRouteGroupHandler,
+		"generateStandaloneRoutesHandler":  g.generateStandaloneRoutesHandler,
+	}).Parse(handlersTemplate)
+	if err != nil {
+		return err
+	}
+
 	file, err := os.Create(filepath.Join(g.template.Options.OutputDir, "handlers.go"))
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// 生成包声明和导入
-	fmt.Fprintf(file, "package %s\n\n", g.template.Options.PackageName)
-	fmt.Fprintf(file, "import (\n")
-	fmt.Fprintf(file, "\t\"net/http\"\n")
-	fmt.Fprintf(file, "\t\"github.com/gin-gonic/gin\"\n")
-	fmt.Fprintf(file, "\t\"github.com/go-kratos/kratos/v2/log\"\n")
-	fmt.Fprintf(file, "\tkgin \"github.com/go-kratos/gin\"\n")
-	fmt.Fprintf(file, ")\n\n")
-
-	// 生成服务处理器
-	for _, service := range g.template.Services {
-		fmt.Fprint(file, g.generateServiceHandlerWithGroups(service))
-	}
-
-	// 生成路由组处理器
-	for _, group := range g.template.RouteGroups {
-		fmt.Fprint(file, g.generateRouteGroupHandler(group))
-	}
-
-	// 生成独立路由处理器
-	if len(g.template.StandaloneRoutes) > 0 {
-		fmt.Fprint(file, g.generateStandaloneRoutesHandler(g.template.StandaloneRoutes))
-	}
-
-	return nil
+	return t.Execute(file, g.template)
 }
 
 // generateServiceHandlerWithGroups 生成带路由组的服务处理器
 func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service) string {
 	var result strings.Builder
 
-	// 收集所有中间件名称
+	// 收集所有中间件名称（包括服务级别和路由组级别）
 	middlewareSet := make(map[string]bool)
+
+	// 收集服务级别中间件
+	for _, middleware := range service.Middleware {
+		cleanMiddleware := strings.Trim(middleware, `"'`)
+		if cleanMiddleware != "" {
+			middlewareSet[cleanMiddleware] = true
+		}
+	}
+
+	// 收集路由组级别中间件
 	for _, group := range service.RouteGroups {
 		for _, middleware := range group.Middleware {
 			cleanMiddleware := strings.Trim(middleware, `"'`)
-			middlewareSet[cleanMiddleware] = true
+			if cleanMiddleware != "" {
+				middlewareSet[cleanMiddleware] = true
+			}
 		}
 		for _, method := range group.Methods {
 			for _, middleware := range method.Middleware {
 				cleanMiddleware := strings.Trim(middleware, `"'`)
-				middlewareSet[cleanMiddleware] = true
+				if cleanMiddleware != "" {
+					middlewareSet[cleanMiddleware] = true
+				}
 			}
 		}
 	}
@@ -81,7 +81,7 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 	// 生成处理器结构体
 	result.WriteString(fmt.Sprintf("// %sHandler %s 处理器\n", service.Name, service.Name))
 	result.WriteString(fmt.Sprintf("type %sHandler struct {\n", service.Name))
-	result.WriteString(fmt.Sprintf("\tlog *log.Helper\n"))
+	result.WriteString("\tlog *log.Helper\n")
 	if len(middlewareSet) > 0 {
 		result.WriteString("\tmiddleware Middleware\n")
 	}
@@ -107,26 +107,76 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 	result.WriteString("}\n\n")
 
 	// 生成路由注册方法
-	result.WriteString(fmt.Sprintf("// RegisterRoutes 注册路由\n"))
+	result.WriteString("// RegisterRoutes 注册路由\n")
 	result.WriteString(fmt.Sprintf("func (h *%sHandler) RegisterRoutes(r *gin.Engine) {\n", service.Name))
+	// 创建顶级路由组（如果有 prefix）
+	var topLevelGroup string
+	if service.Prefix != "" {
+		topLevelGroup = "PrefixGroup"
+		result.WriteString(fmt.Sprintf("\t%s := r.Group(\"/%s\")\n", topLevelGroup, service.Prefix))
+		result.WriteString("\t{\n")
+
+		// 应用服务级别中间件
+		for _, middleware := range service.Middleware {
+			cleanMiddleware := strings.Trim(middleware, `"'`)
+			if cleanMiddleware != "" {
+				result.WriteString(fmt.Sprintf("\t\t%s.Use(h.middleware.%s())\n",
+					topLevelGroup, strings.Title(cleanMiddleware)))
+			}
+		}
+	} else {
+		// 如果没有 prefix，直接在根路由上应用服务级别中间件
+		for _, middleware := range service.Middleware {
+			cleanMiddleware := strings.Trim(middleware, `"'`)
+			if cleanMiddleware != "" {
+				result.WriteString(fmt.Sprintf("\tr.Use(h.middleware.%s())\n", strings.Title(cleanMiddleware)))
+			}
+		}
+	}
 
 	// 注册非分组路由
 	for _, method := range service.Methods {
-		result.WriteString(fmt.Sprintf("\tr.%s(\"%s\", h.%s)\n",
-			strings.ToUpper(method.HTTPMethod), method.Path, method.Name))
+		router := "r"
+		indent := "\t"
+		if topLevelGroup != "" {
+			router = topLevelGroup
+			indent = "\t\t"
+		}
+
+		result.WriteString(fmt.Sprintf("%s%s.%s(\"%s\", h.%s)\n",
+			indent, router, strings.ToUpper(method.HTTPMethod), method.Path, method.Name))
 	}
 
 	// 注册分组路由
 	for _, group := range service.RouteGroups {
 		groupVarName := strings.Title(group.Name) + "Group"
-		result.WriteString(fmt.Sprintf("\n\t%s := r.Group(\"%s\")\n", groupVarName, group.Path))
-		result.WriteString("\t{\n")
 
-		// 应用组级中间件
+		parentRouter := "r"
+		indent := "\t"
+		if topLevelGroup != "" {
+			parentRouter = topLevelGroup
+			indent = "\t\t"
+		}
+
+		result.WriteString(fmt.Sprintf("\n%s%s := %s.Group(\"%s\")\n", indent, groupVarName, parentRouter, group.Path))
+		result.WriteString(fmt.Sprintf("%s{\n", indent))
+
+		// 应用组级中间件（避免重复应用服务级别中间件）
+		serviceMiddlewareSet := make(map[string]bool)
+		for _, middleware := range service.Middleware {
+			cleanMiddleware := strings.Trim(middleware, `"'`)
+			if cleanMiddleware != "" {
+				serviceMiddlewareSet[cleanMiddleware] = true
+			}
+		}
+
 		for _, middleware := range group.Middleware {
 			cleanMiddleware := strings.Trim(middleware, `"'`)
-			result.WriteString(fmt.Sprintf("\t\t%s.Use(h.middleware.%s())\n",
-				groupVarName, strings.Title(cleanMiddleware)))
+			// 过滤掉注释和无效的中间件名称，如果组中间件不在服务级别中间件中，才应用
+			if cleanMiddleware != "" && !serviceMiddlewareSet[cleanMiddleware] {
+				result.WriteString(fmt.Sprintf("%s\t%s.Use(h.middleware.%s())\n",
+					indent, groupVarName, strings.Title(cleanMiddleware)))
+			}
 		}
 
 		// 注册组内路由
@@ -136,10 +186,15 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 				cleanMiddleware := strings.Trim(middleware, `"'`)
 				middlewareChain += fmt.Sprintf("h.middleware.%s(), ", strings.Title(cleanMiddleware))
 			}
-			result.WriteString(fmt.Sprintf("\t\t%s.%s(\"%s\", %sh.%s)\n",
-				groupVarName, strings.ToUpper(method.HTTPMethod), method.Path, middlewareChain, method.Name))
+			result.WriteString(fmt.Sprintf("%s\t%s.%s(\"%s\", %sh.%s)\n",
+				indent, groupVarName, strings.ToUpper(method.HTTPMethod), method.Path, middlewareChain, method.Name))
 		}
 
+		result.WriteString(fmt.Sprintf("%s}\n", indent))
+	}
+
+	// 关闭顶级路由组
+	if topLevelGroup != "" {
 		result.WriteString("\t}\n")
 	}
 
@@ -239,7 +294,7 @@ func (g *CodeGenerator) generateRouteGroupHandler(group parser.RouteGroup) strin
 	result.WriteString("}\n\n")
 
 	// 生成路由注册方法
-	result.WriteString(fmt.Sprintf("// RegisterRoutes 注册路由\n"))
+	result.WriteString("// RegisterRoutes 注册路由\n")
 	result.WriteString(fmt.Sprintf("func (h *%sHandler) RegisterRoutes(r *gin.Engine) {\n", group.Name))
 
 	groupVarName := strings.Title(group.Name) + "Group"

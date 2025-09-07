@@ -7,14 +7,9 @@ import (
 	kgin "github.com/go-kratos/gin"
 )
 
-{{range .Services}}{{. | generateServiceHandlerWithGroups}}{{end}}
+{{range .Services}}{{generateServiceHandlerWithGroups .}}{{end}}
 
-{{range .RouteGroups}}{{. | generateRouteGroupHandler}}{{end}}
+{{range .RouteGroups}}{{generateRouteGroupHandler .}}{{end}}
 
-{{if .StandaloneRoutes}}{{.StandaloneRoutes | generateStandaloneRoutesHandler}}{{end}}
-
-// ErrorBadRequest 创建错误响应
-func ErrorBadRequest(message string) error {
-	return kgin.NewError(http.StatusBadRequest, message)
-}
+{{if .StandaloneRoutes}}{{generateStandaloneRoutesHandler .StandaloneRoutes}}{{end}}
 

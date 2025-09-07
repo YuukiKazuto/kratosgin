@@ -1,0 +1,22 @@
+package middleware
+
+import (
+	"github.com/gin-gonic/gin"
+	{{.PackageAlias}} "{{.ModuleName}}/api/{{.APIPath}}/{{.PackageName}}"
+)
+
+type {{.ServiceName}}Middleware struct {
+}
+
+func New{{.ServiceName}}Middleware() {{.PackageAlias}}.Middleware {
+	return &{{.ServiceName}}Middleware{}
+}
+
+{{range .MiddlewareNames}}
+func (m *{{$.ServiceName}}Middleware) {{. | title}}() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// TODO: 实现 {{. | title}} 中间件逻辑
+		c.Next()
+	}
+}
+{{end}}
