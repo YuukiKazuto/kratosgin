@@ -8,8 +8,14 @@ type (
 		Name string `json:"name" binding:"required"`
 		Email string `json:"email" binding:"required,email"`
 	}
-	
+
+	Base {
+		Code int `json:"code"`
+		Msg string `json:"msg"`
+	}
+
 	UserResp {
+		Base // 嵌入式字段
 		ID int `json:"id"`
 		Name string `json:"name"`
 		Email string `json:"email"`

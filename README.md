@@ -25,7 +25,7 @@
 ### 1. 安装命令行工具
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@v0.3.1
+go install github.com/YuukiKazuto/kratosgin@v0.3.2
 ```
 
 ### 2. 创建模板文件
@@ -62,7 +62,7 @@ kratosgin gen -f user.gin -s internal/service -m internal/middleware
 ### 安装
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@v0.3.1
+go install github.com/YuukiKazuto/kratosgin@v0.3.2
 ```
 
 ### 命令说明
@@ -620,7 +620,13 @@ type (
         Email string `json:"email" binding:"required,email"`
     }
     
-    UserResp {
+    Base {
+		Code int `json:"code"`
+		Msg string `json:"msg"`
+	}
+
+	UserResp {
+		Base // 嵌入式字段
         ID int `json:"id"`
         Name string `json:"name"`
         Email string `json:"email"`

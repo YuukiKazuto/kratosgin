@@ -4,56 +4,63 @@ package v1
 
 // UserReq 结构体
 type UserReq struct {
-	ID    int    `json:"id" binding:"required,min=1"`    //
-	Name  string `json:"name" binding:"required"`        //
-	Email string `json:"email" binding:"required,email"` //
+	ID    int    `json:"id" binding:"required,min=1"`
+	Name  string `json:"name" binding:"required"`
+	Email string `json:"email" binding:"required,email"`
+}
+
+// Base 结构体
+type Base struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
 }
 
 // UserResp 结构体
 type UserResp struct {
-	ID        int    `json:"id"`         //
-	Name      string `json:"name"`       //
-	Email     string `json:"email"`      //
-	CreatedAt string `json:"created_at"` //
-	UpdatedAt string `json:"updated_at"` //
+	Base             // 嵌入式字段
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // CreateUserReq 结构体
 type CreateUserReq struct {
-	Name     string `json:"name" binding:"required"`           //
-	Email    string `json:"email" binding:"required,email"`    //
-	Password string `json:"password" binding:"required,min=6"` //
+	Name     string `json:"name" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
 }
 
 // CreateUserResp 结构体
 type CreateUserResp struct {
-	ID        int    `json:"id"`         //
-	Name      string `json:"name"`       //
-	Email     string `json:"email"`      //
-	CreatedAt string `json:"created_at"` //
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"created_at"`
 }
 
 // UpdateUserReq 结构体
 type UpdateUserReq struct {
-	ID    int    `json:"id" binding:"required,min=1"` //
-	Name  string `json:"name"`                        //
-	Email string `json:"email" binding:"email"`       //
+	ID    int    `json:"id" binding:"required,min=1"`
+	Name  string `json:"name"`
+	Email string `json:"email" binding:"email"`
 }
 
 // UpdateUserResp 结构体
 type UpdateUserResp struct {
-	ID        int    `json:"id"`         //
-	Name      string `json:"name"`       //
-	Email     string `json:"email"`      //
-	UpdatedAt string `json:"updated_at"` //
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // User 结构体
 type User struct {
-	ID        int    `json:"id"`         //
-	Name      string `json:"name"`       //
-	Email     string `json:"email"`      //
-	Password  string `json:"-"`          //
-	CreatedAt string `json:"created_at"` //
-	UpdatedAt string `json:"updated_at"` //
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Password  string `json:"-"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }

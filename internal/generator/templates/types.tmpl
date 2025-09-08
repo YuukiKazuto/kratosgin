@@ -5,6 +5,7 @@ package {{.Options.PackageName}}
 {{range .Types}}
 // {{.Name}} 结构体
 type {{.Name}} struct {
-{{range .Fields}}	{{.Name}} {{.Type}} `{{.Tag}}` // {{.Comment}}
-{{end}}}
+{{range .Fields}}{{if .Name}}	{{.Name}} {{.Type}} `{{.Tag}}`{{if .Comment}} // {{.Comment}}{{end}}
+{{else}}	{{.Type}}{{if .Tag}} `{{.Tag}}`{{end}}{{if .Comment}} // {{.Comment}}{{end}}
+{{end}}{{end}}}
 {{end}}

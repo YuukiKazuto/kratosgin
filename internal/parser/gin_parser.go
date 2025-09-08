@@ -444,9 +444,53 @@ func parseOptions(lines []string, start int, options *Options) error {
 }
 
 func parseField(line string) (Field, error) {
-	// 解析字段格式: name type `tag` // comment
+	// 解析字段格式: name type `tag` // comment 或嵌入字段: TypeName
 	// 支持数组类型如 []User, map[string]interface{} 等
 	// 支持指针类型如 *User 等
+	// 支持嵌入字段如 Base
+
+	// 首先尝试解析嵌入字段（没有字段名，只有类型名）
+	// 嵌入字段格式：TypeName 或 TypeName `tag` 或 TypeName `tag` // comment
+	embeddedRe := regexp.MustCompile(`^(\w+)\s*` + "`([^`]*)`" + `\s*(?://\s*(.*))?$`)
+	embeddedMatches := embeddedRe.FindStringSubmatch(line)
+	if len(embeddedMatches) >= 3 {
+		// 这是带 tag 的嵌入字段
+		field := Field{
+			Name: "", // 嵌入字段没有名称
+			Type: embeddedMatches[1],
+			Tag:  embeddedMatches[2],
+		}
+
+		if len(embeddedMatches) > 3 && embeddedMatches[3] != "" {
+			field.Comment = strings.TrimSpace(embeddedMatches[3])
+		}
+
+		return field, nil
+	}
+
+	// 尝试解析没有 tag 的嵌入字段：TypeName 或 TypeName // comment
+	embeddedNoTagRe := regexp.MustCompile(`^(\w+)\s*(?://\s*(.*))?$`)
+	embeddedNoTagMatches := embeddedNoTagRe.FindStringSubmatch(line)
+	if len(embeddedNoTagMatches) >= 2 {
+		// 检查是否包含空格和反引号，如果有则不是嵌入字段
+		// 嵌入字段不应该包含空格（除了可能的注释）和反引号
+		if !strings.Contains(line, "`") && (strings.Count(line, " ") <= 1 || strings.Contains(line, "//")) {
+			// 这是没有 tag 的嵌入字段
+			field := Field{
+				Name: "", // 嵌入字段没有名称
+				Type: embeddedNoTagMatches[1],
+				Tag:  "",
+			}
+
+			if len(embeddedNoTagMatches) > 2 && embeddedNoTagMatches[2] != "" {
+				field.Comment = strings.TrimSpace(embeddedNoTagMatches[2])
+			}
+
+			return field, nil
+		}
+	}
+
+	// 解析普通字段格式: name type `tag` // comment
 	re := regexp.MustCompile(`(\w+)\s+([\w\[\]{}.,*]+)\s+` + "`([^`]*)`" + `\s*(?://\s*(.*))?`)
 	matches := re.FindStringSubmatch(line)
 	if len(matches) < 4 {
@@ -462,7 +506,8 @@ func parseField(line string) (Field, error) {
 	// 检查是否必填
 	field.Required = strings.Contains(field.Tag, "required")
 
-	if len(matches) > 4 {
+	// 注释是可选的，有就添加，没有就空着
+	if len(matches) > 4 && matches[4] != "" {
 		field.Comment = strings.TrimSpace(matches[4])
 	}
 
@@ -593,7 +638,7 @@ func parseTypeGroup(lines []string, start int, template *GinTemplate) (int, erro
 						}
 
 						// 解析字段
-						if strings.Contains(fieldLine, " ") && !strings.HasPrefix(fieldLine, "}") {
+						if !strings.HasPrefix(fieldLine, "}") {
 							field, err := parseField(fieldLine)
 							if err != nil {
 								return start, err
