@@ -1,6 +1,6 @@
 # Kratos Gin 代码生成器
 
-一个基于 Kratos 框架和 Gin 路由的 API 代码生成器，支持自定义模板语法和验证规则。
+基于 Kratos 和 Gin 的现代化 Go API 代码生成器，采用模板驱动设计，支持版本化路由、智能中间件管理、自定义验证器和完整的代码脚手架生成。
 
 ## 功能特性
 
@@ -17,6 +17,7 @@
 - 🎨 **代码模板化**: 使用 Go 模板引擎生成代码，更优雅和可维护
 - 📝 **自动格式化**: 内置 `.gin` 文件格式化功能，统一代码风格
 - 🔄 **多种类型定义**: 支持 `type Name {}`、`type Name struct {}` 和 `type ()` 组语法
+- 🛠️ **模板优化**: 服务实现和中间件模板支持日志记录，提供更好的开发体验
 
 
 ## 快速开始
@@ -24,7 +25,7 @@
 ### 1. 安装命令行工具
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@v0.3.0
+go install github.com/YuukiKazuto/kratosgin@v0.3.1
 ```
 
 ### 2. 创建模板文件
@@ -61,7 +62,7 @@ kratosgin gen -f user.gin -s internal/service -m internal/middleware
 ### 安装
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@v0.3.0
+go install github.com/YuukiKazuto/kratosgin@v0.3.1
 ```
 
 ### 命令说明
@@ -606,109 +607,84 @@ kratosgin/
 以下是一个完整的 `.gin` 文件示例，展示了所有语法特性：
 
 ```gin
-info {
-    title: "电商系统 API"
-    version: "v1.0.0"
-    desc: "电商系统的用户和商品管理 API"
-}
-
 options {
-    outputDir: "api/ecommerce/v1"
-    packageName: "v1"
+    packageName: v1
+    outputDir: api/user/v1
 }
 
-// 用户相关类型（使用类型组语法）
+// 使用类型组语法定义多个相关类型
 type (
-    User {
-        ID       int64  `json:"id"`
-        Username string `json:"username"`
-        Email    string `json:"email"`
-        Phone    string `json:"phone"`
+    UserReq {
+        ID int `json:"id" binding:"required,min=1"`
+        Name string `json:"name" binding:"required"`
+        Email string `json:"email" binding:"required,email"`
     }
     
-    CreateUserRequest {
-        Username string `json:"username" binding:"required,username"`
-        Email    string `json:"email" binding:"required,email"`
-        Phone    string `json:"phone" binding:"required,mobile"`
-        Password string `json:"password" binding:"required,password"`
+    UserResp {
+        ID int `json:"id"`
+        Name string `json:"name"`
+        Email string `json:"email"`
+        CreatedAt string `json:"created_at"`
+        UpdatedAt string `json:"updated_at"`
     }
     
-    CreateUserResponse {
-        User  User   `json:"user"`
-        Token string `json:"token"`
+    CreateUserReq {
+        Name string `json:"name" binding:"required"`
+        Email string `json:"email" binding:"required,email"`
+        Password string `json:"password" binding:"required,min=6"`
     }
     
-    GetUserRequest {
-        ID int64 `json:"id" binding:"required,min=1"`
+    CreateUserResp {
+        ID int `json:"id"`
+        Name string `json:"name"`
+        Email string `json:"email"`
+        CreatedAt string `json:"created_at"`
     }
     
-    GetUserResponse {
-        User User `json:"user"`
+    UpdateUserReq {
+        ID int `json:"id" binding:"required,min=1"`
+        Name string `json:"name"`
+        Email string `json:"email" binding:"email"`
+    }
+    
+    UpdateUserResp {
+        ID int `json:"id"`
+        Name string `json:"name"`
+        Email string `json:"email"`
+        UpdatedAt string `json:"updated_at"`
     }
 )
 
-// 商品相关类型（使用类型组语法）
-type (
-    Product {
-        ID          int64   `json:"id"`
-        Name        string  `json:"name"`
-        Description string  `json:"description"`
-        Price       float64 `json:"price"`
-        Stock       int     `json:"stock"`
-    }
-    
-    CreateProductRequest {
-        Name        string  `json:"name" binding:"required,min=1,max=100"`
-        Description string  `json:"description" binding:"max=500"`
-        Price       float64 `json:"price" binding:"required,min=0"`
-        Stock       int     `json:"stock" binding:"required,min=0"`
-    }
-    
-    CreateProductResponse {
-        Product Product `json:"product"`
-    }
-    
-    GetProductRequest {
-        ID int64 `json:"id" binding:"required,min=1"`
-    }
-    
-    GetProductResponse {
-        Product Product `json:"product"`
-    }
-)
+// 使用单独类型语法定义结构体
+type User struct {
+    ID int `json:"id"`
+    Name string `json:"name"`
+    Email string `json:"email"`
+    Password string `json:"-"`
+    CreatedAt string `json:"created_at"`
+    UpdatedAt string `json:"updated_at"`
+}
 
-// 用户服务（带前缀和服务级中间件）
+// 用户服务定义，包含服务前缀和中间件
 service UserService prefix v1 {
-    middleware: ["auth", "logging"]  // 服务级中间件
+    middleware: ["auth", "logging"]
     
-    // 直接路由
-    @getUser GET /user/:id GetUserRequest GetUserResponse
+    @GetUser GET /users/:id UserReq UserResp
+    @CreateUser POST /users CreateUserReq CreateUserResp
+    @UpdateUser PUT /users/:id UpdateUserReq UpdateUserResp
+    @DeleteUser DELETE /users/:id UserReq UserResp
     
-    // 路由分组
+    // 管理员路由组
     group @admin /admin {
-        middleware: ["admin"]  // 组级中间件
-        @createUser POST /user WithGinContext CreateUserRequest CreateUserResponse
-        @updateUser PUT /user/:id UpdateUserRequest UpdateUserResponse
+        middleware: ["admin"]
+        @GetAllUsers GET /users UserReq UserResp
+        @BulkDeleteUsers DELETE /users UserReq UserResp
     }
     
+    // 公开路由组
     group @public /public {
-        // 没有组级中间件，只继承服务级中间件
-        @getPublicUser GET /user/:id GetUserRequest GetUserResponse
-    }
-}
-
-// 商品服务（无前缀）
-service ProductService {
-    middleware: ["cors", "rateLimit"]  // 服务级中间件
-    
-    // 直接路由
-    @getProduct GET /product/:id GetProductRequest GetProductResponse
-    
-    // 路由分组
-    group @api /api {
-        middleware: ["apiKey"]  // 组级中间件
-        @createProduct POST /product CreateProductRequest CreateProductResponse
-        @updateProduct PUT /product/:id UpdateProductRequest UpdateProductResponse
+        @GetPublicUser GET /users/:id UserReq UserResp
+        @SearchUsers GET /users/search UserReq UserResp
     }
 }
 
@@ -717,15 +693,14 @@ service ProductService {
 **生成的路由结构：**
 
 用户服务会生成以下路由：
-- `GET /v1/user/:id` (应用 auth, logging 中间件)
-- `POST /v1/admin/user` (应用 auth, logging, admin 中间件)
-- `PUT /v1/admin/user/:id` (应用 auth, logging, admin 中间件)
-- `GET /v1/public/user/:id` (应用 auth, logging 中间件)
-
-商品服务会生成以下路由：
-- `GET /product/:id` (应用 cors, rateLimit 中间件)
-- `POST /api/product` (应用 cors, rateLimit, apiKey 中间件)
-- `PUT /api/product/:id` (应用 cors, rateLimit, apiKey 中间件)
+- `GET /v1/users/:id` (应用 auth, logging 中间件)
+- `POST /v1/users` (应用 auth, logging 中间件)
+- `PUT /v1/users/:id` (应用 auth, logging 中间件)
+- `DELETE /v1/users/:id` (应用 auth, logging 中间件)
+- `GET /v1/admin/users` (应用 auth, logging, admin 中间件)
+- `DELETE /v1/admin/users` (应用 auth, logging, admin 中间件)
+- `GET /v1/public/users/:id` (应用 auth, logging 中间件)
+- `GET /v1/public/users/search` (应用 auth, logging 中间件)
 
 ## 新功能使用场景
 

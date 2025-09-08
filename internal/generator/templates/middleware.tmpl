@@ -1,11 +1,14 @@
 package middleware
 
 import (
-	"github.com/gin-gonic/gin"
 	{{.PackageAlias}} "{{.ModuleName}}/api/{{.APIPath}}/{{.PackageName}}"
+	
+	"github.com/gin-gonic/gin"
+	"github.com/go-kratos/kratos/v2/log"
 )
 
 type {{.ServiceName}}Middleware struct {
+	log *log.Helper
 }
 
 func New{{.ServiceName}}Middleware() {{.PackageAlias}}.Middleware {
@@ -15,6 +18,7 @@ func New{{.ServiceName}}Middleware() {{.PackageAlias}}.Middleware {
 {{range .MiddlewareNames}}
 func (m *{{$.ServiceName}}Middleware) {{. | title}}() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		m.log.Infof("调用 {{. | title}} 方法")
 		// TODO: 实现 {{. | title}} 中间件逻辑
 		c.Next()
 	}

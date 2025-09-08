@@ -7,7 +7,7 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 )
 
-// UserService UserService 服务实现
+// UserService 服务实现
 type UserService struct {
 	log *log.Helper
 }
