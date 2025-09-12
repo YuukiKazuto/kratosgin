@@ -7,12 +7,29 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"unicode"
 
 	"github.com/YuukiKazuto/kratosgin/internal/parser"
 )
 
 //go:embed templates/handlers.tmpl
 var handlersTemplate string
+
+// toCamelCase 将字符串转换为小驼峰命名
+func toCamelCase(s string) string {
+	if s == "" {
+		return s
+	}
+
+	runes := []rune(s)
+	if len(runes) == 0 {
+		return s
+	}
+
+	// 第一个字符转小写
+	runes[0] = unicode.ToLower(runes[0])
+	return string(runes)
+}
 
 // generateHTTPHandlers 生成 HTTP 处理器
 func (g *CodeGenerator) generateHTTPHandlers() error {
@@ -85,7 +102,8 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 	if len(middlewareSet) > 0 {
 		result.WriteString("\tmiddleware Middleware\n")
 	}
-	result.WriteString(fmt.Sprintf("\t%s %s\n", service.Name, service.Name))
+	result.WriteString(fmt.Sprintf("\t%s %s\n", toCamelCase(service.Name), service.Name))
+	result.WriteString("\ttranslator ut.Translator\n")
 	result.WriteString("}\n\n")
 
 	// 生成构造函数
@@ -94,7 +112,8 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 	if len(middlewareSet) > 0 {
 		result.WriteString(", middleware Middleware")
 	}
-	result.WriteString(fmt.Sprintf(", %s %s", strings.ToLower(service.Name), service.Name))
+	result.WriteString(fmt.Sprintf(", %s %s", toCamelCase(service.Name), service.Name))
+	result.WriteString(", translator ut.Translator")
 	result.WriteString(fmt.Sprintf(") *%sHandler {\n", service.Name))
 	result.WriteString("\treturn &")
 	result.WriteString(fmt.Sprintf("%sHandler{\n", service.Name))
@@ -102,7 +121,8 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 	if len(middlewareSet) > 0 {
 		result.WriteString("\t\tmiddleware: middleware,\n")
 	}
-	result.WriteString(fmt.Sprintf("\t\t%s: %s,\n", service.Name, strings.ToLower(service.Name)))
+	result.WriteString(fmt.Sprintf("\t\t%s: %s,\n", toCamelCase(service.Name), toCamelCase(service.Name)))
+	result.WriteString("\t\ttranslator: translator,\n")
 	result.WriteString("\t}\n")
 	result.WriteString("}\n\n")
 
@@ -213,6 +233,7 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 		// 绑定请求
 		result.WriteString(fmt.Sprintf("\treq := &%s{}\n", method.Request))
 		result.WriteString("\tif err := c.ShouldBind(req); err != nil {\n")
+		result.WriteString("\t\terr = translateValidationError(err, h.translator)\n")
 		result.WriteString(fmt.Sprintf("\t\th.log.Errorw(\"Struct\", \"%sHandler\", \"method\", \"%s\", \"error\", err)\n", service.Name, method.Name))
 		result.WriteString("\t\tc.JSON(http.StatusBadRequest, gin.H{\n")
 		result.WriteString("\t\t\t\"message\": err.Error(),\n")
@@ -226,7 +247,7 @@ func (g *CodeGenerator) generateServiceHandlerWithGroups(service parser.Service)
 		} else {
 			result.WriteString("\tctx := c.Request.Context()\n")
 		}
-		result.WriteString(fmt.Sprintf("\tresp, err := h.%s.%s(ctx, req)\n", service.Name, strings.Title(method.Name)))
+		result.WriteString(fmt.Sprintf("\tresp, err := h.%s.%s(ctx, req)\n", toCamelCase(service.Name), strings.Title(method.Name)))
 		result.WriteString("\tif err != nil {\n")
 		result.WriteString("\t\tkgin.Error(c, err)\n")
 		result.WriteString("\t\treturn\n")
@@ -275,6 +296,7 @@ func (g *CodeGenerator) generateRouteGroupHandler(group parser.RouteGroup) strin
 	if len(middlewareSet) > 0 {
 		result.WriteString("\tmiddleware Middleware\n")
 	}
+	result.WriteString("\ttranslator ut.Translator\n")
 	result.WriteString("}\n\n")
 
 	// 生成构造函数
@@ -283,6 +305,7 @@ func (g *CodeGenerator) generateRouteGroupHandler(group parser.RouteGroup) strin
 	if len(middlewareSet) > 0 {
 		result.WriteString(", middleware Middleware")
 	}
+	result.WriteString(", translator ut.Translator")
 	result.WriteString(fmt.Sprintf(") *%sHandler {\n", group.Name))
 	result.WriteString("\treturn &")
 	result.WriteString(fmt.Sprintf("%sHandler{\n", group.Name))
@@ -290,6 +313,7 @@ func (g *CodeGenerator) generateRouteGroupHandler(group parser.RouteGroup) strin
 	if len(middlewareSet) > 0 {
 		result.WriteString("\t\tmiddleware: middleware,\n")
 	}
+	result.WriteString("\t\ttranslator: translator,\n")
 	result.WriteString("\t}\n")
 	result.WriteString("}\n\n")
 
@@ -330,6 +354,7 @@ func (g *CodeGenerator) generateRouteGroupHandler(group parser.RouteGroup) strin
 		// 绑定请求
 		result.WriteString(fmt.Sprintf("\treq := &%s{}\n", method.Request))
 		result.WriteString("\tif err := c.ShouldBind(req); err != nil {\n")
+		result.WriteString("\t\terr = translateValidationError(err, h.translator)\n")
 		result.WriteString(fmt.Sprintf("\t\th.log.Errorw(\"Struct\", \"%sHandler\", \"method\", \"%s\", \"error\", err)\n", group.Name, method.Name))
 		result.WriteString("\t\tc.JSON(http.StatusBadRequest, gin.H{\n")
 		result.WriteString("\t\t\t\"message\": err.Error(),\n")
@@ -343,7 +368,7 @@ func (g *CodeGenerator) generateRouteGroupHandler(group parser.RouteGroup) strin
 		} else {
 			result.WriteString("\tctx := c.Request.Context()\n")
 		}
-		result.WriteString(fmt.Sprintf("\tresp, err := h.%s.%s(ctx, req)\n", group.Name, method.Name))
+		result.WriteString(fmt.Sprintf("\tresp, err := h.%s.%s(ctx, req)\n", toCamelCase(group.Name), method.Name))
 		result.WriteString("\tif err != nil {\n")
 		result.WriteString("\t\tkgin.Error(c, err)\n")
 		result.WriteString("\t\treturn\n")
@@ -365,13 +390,15 @@ func (g *CodeGenerator) generateStandaloneRoutesHandler(routes []parser.Standalo
 	result.WriteString("// StandaloneHandler 独立路由处理器\n")
 	result.WriteString("type StandaloneHandler struct {\n")
 	result.WriteString("\tlog *log.Helper\n")
+	result.WriteString("\ttranslator ut.Translator\n")
 	result.WriteString("}\n\n")
 
 	// 生成构造函数
 	result.WriteString("// NewStandaloneHandler 创建独立路由处理器\n")
-	result.WriteString("func NewStandaloneHandler(logger log.Logger) *StandaloneHandler {\n")
+	result.WriteString("func NewStandaloneHandler(logger log.Logger, translator ut.Translator) *StandaloneHandler {\n")
 	result.WriteString("\treturn &StandaloneHandler{\n")
 	result.WriteString("\t\tlog: log.NewHelper(logger),\n")
+	result.WriteString("\t\ttranslator: translator,\n")
 	result.WriteString("\t}\n")
 	result.WriteString("}\n\n")
 
@@ -394,6 +421,7 @@ func (g *CodeGenerator) generateStandaloneRoutesHandler(routes []parser.Standalo
 		// 绑定请求
 		result.WriteString(fmt.Sprintf("\treq := &%s{}\n", route.Request))
 		result.WriteString("\tif err := c.ShouldBind(req); err != nil {\n")
+		result.WriteString("\t\terr = translateValidationError(err, h.translator)\n")
 		result.WriteString(fmt.Sprintf("\t\th.log.Errorw(\"Struct\", \"StandaloneHandler\", \"method\", \"%s\", \"error\", err)\n", route.Name))
 		result.WriteString("\t\tc.JSON(http.StatusBadRequest, gin.H{\n")
 		result.WriteString("\t\t\t\"message\": err.Error(),\n")
@@ -407,7 +435,7 @@ func (g *CodeGenerator) generateStandaloneRoutesHandler(routes []parser.Standalo
 		} else {
 			result.WriteString("\tctx := c.Request.Context()\n")
 		}
-		result.WriteString(fmt.Sprintf("\tresp, err := h.%s.%s(ctx, req)\n", route.Name, route.Name))
+		result.WriteString(fmt.Sprintf("\tresp, err := h.%s.%s(ctx, req)\n", toCamelCase(route.Name), route.Name))
 		result.WriteString("\tif err != nil {\n")
 		result.WriteString("\t\tkgin.Error(c, err)\n")
 		result.WriteString("\t\treturn\n")

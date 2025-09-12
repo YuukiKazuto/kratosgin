@@ -3,9 +3,12 @@
 package v1
 
 import (
+	"errors"
 	"github.com/gin-gonic/gin"
 	kgin "github.com/go-kratos/gin"
 	"github.com/go-kratos/kratos/v2/log"
+	ut "github.com/go-playground/universal-translator"
+	"github.com/go-playground/validator/v10"
 	"net/http"
 )
 
@@ -20,15 +23,17 @@ type Middleware interface {
 type UserServiceHandler struct {
 	log         *log.Helper
 	middleware  Middleware
-	UserService UserService
+	userService UserService
+	translator  ut.Translator
 }
 
 // NewUserServiceHandler 创建 UserService 处理器
-func NewUserServiceHandler(logger log.Logger, middleware Middleware, userservice UserService) *UserServiceHandler {
+func NewUserServiceHandler(logger log.Logger, middleware Middleware, userService UserService, translator ut.Translator) *UserServiceHandler {
 	return &UserServiceHandler{
 		log:         log.NewHelper(logger),
 		middleware:  middleware,
-		UserService: userservice,
+		userService: userService,
+		translator:  translator,
 	}
 }
 
@@ -62,6 +67,7 @@ func (h *UserServiceHandler) RegisterRoutes(r *gin.Engine) {
 func (h *UserServiceHandler) GetUser(c *gin.Context) {
 	req := &UserReq{}
 	if err := c.ShouldBind(req); err != nil {
+		err = translateValidationError(err, h.translator)
 		h.log.Errorw("Struct", "UserServiceHandler", "method", "GetUser", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -70,7 +76,7 @@ func (h *UserServiceHandler) GetUser(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := h.UserService.GetUser(ctx, req)
+	resp, err := h.userService.GetUser(ctx, req)
 	if err != nil {
 		kgin.Error(c, err)
 		return
@@ -83,6 +89,7 @@ func (h *UserServiceHandler) GetUser(c *gin.Context) {
 func (h *UserServiceHandler) CreateUser(c *gin.Context) {
 	req := &CreateUserReq{}
 	if err := c.ShouldBind(req); err != nil {
+		err = translateValidationError(err, h.translator)
 		h.log.Errorw("Struct", "UserServiceHandler", "method", "CreateUser", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -91,7 +98,7 @@ func (h *UserServiceHandler) CreateUser(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := h.UserService.CreateUser(ctx, req)
+	resp, err := h.userService.CreateUser(ctx, req)
 	if err != nil {
 		kgin.Error(c, err)
 		return
@@ -104,6 +111,7 @@ func (h *UserServiceHandler) CreateUser(c *gin.Context) {
 func (h *UserServiceHandler) UpdateUser(c *gin.Context) {
 	req := &UpdateUserReq{}
 	if err := c.ShouldBind(req); err != nil {
+		err = translateValidationError(err, h.translator)
 		h.log.Errorw("Struct", "UserServiceHandler", "method", "UpdateUser", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -112,7 +120,7 @@ func (h *UserServiceHandler) UpdateUser(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := h.UserService.UpdateUser(ctx, req)
+	resp, err := h.userService.UpdateUser(ctx, req)
 	if err != nil {
 		kgin.Error(c, err)
 		return
@@ -125,6 +133,7 @@ func (h *UserServiceHandler) UpdateUser(c *gin.Context) {
 func (h *UserServiceHandler) DeleteUser(c *gin.Context) {
 	req := &UserReq{}
 	if err := c.ShouldBind(req); err != nil {
+		err = translateValidationError(err, h.translator)
 		h.log.Errorw("Struct", "UserServiceHandler", "method", "DeleteUser", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -133,7 +142,7 @@ func (h *UserServiceHandler) DeleteUser(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := h.UserService.DeleteUser(ctx, req)
+	resp, err := h.userService.DeleteUser(ctx, req)
 	if err != nil {
 		kgin.Error(c, err)
 		return
@@ -146,6 +155,7 @@ func (h *UserServiceHandler) DeleteUser(c *gin.Context) {
 func (h *UserServiceHandler) GetAllUsers(c *gin.Context) {
 	req := &UserReq{}
 	if err := c.ShouldBind(req); err != nil {
+		err = translateValidationError(err, h.translator)
 		h.log.Errorw("Struct", "UserServiceHandler", "method", "GetAllUsers", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -154,7 +164,7 @@ func (h *UserServiceHandler) GetAllUsers(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := h.UserService.GetAllUsers(ctx, req)
+	resp, err := h.userService.GetAllUsers(ctx, req)
 	if err != nil {
 		kgin.Error(c, err)
 		return
@@ -167,6 +177,7 @@ func (h *UserServiceHandler) GetAllUsers(c *gin.Context) {
 func (h *UserServiceHandler) BulkDeleteUsers(c *gin.Context) {
 	req := &UserReq{}
 	if err := c.ShouldBind(req); err != nil {
+		err = translateValidationError(err, h.translator)
 		h.log.Errorw("Struct", "UserServiceHandler", "method", "BulkDeleteUsers", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -175,7 +186,7 @@ func (h *UserServiceHandler) BulkDeleteUsers(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := h.UserService.BulkDeleteUsers(ctx, req)
+	resp, err := h.userService.BulkDeleteUsers(ctx, req)
 	if err != nil {
 		kgin.Error(c, err)
 		return
@@ -188,6 +199,7 @@ func (h *UserServiceHandler) BulkDeleteUsers(c *gin.Context) {
 func (h *UserServiceHandler) GetPublicUser(c *gin.Context) {
 	req := &UserReq{}
 	if err := c.ShouldBind(req); err != nil {
+		err = translateValidationError(err, h.translator)
 		h.log.Errorw("Struct", "UserServiceHandler", "method", "GetPublicUser", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -196,7 +208,7 @@ func (h *UserServiceHandler) GetPublicUser(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := h.UserService.GetPublicUser(ctx, req)
+	resp, err := h.userService.GetPublicUser(ctx, req)
 	if err != nil {
 		kgin.Error(c, err)
 		return
@@ -209,6 +221,7 @@ func (h *UserServiceHandler) GetPublicUser(c *gin.Context) {
 func (h *UserServiceHandler) SearchUsers(c *gin.Context) {
 	req := &UserReq{}
 	if err := c.ShouldBind(req); err != nil {
+		err = translateValidationError(err, h.translator)
 		h.log.Errorw("Struct", "UserServiceHandler", "method", "SearchUsers", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": err.Error(),
@@ -217,11 +230,31 @@ func (h *UserServiceHandler) SearchUsers(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := h.UserService.SearchUsers(ctx, req)
+	resp, err := h.userService.SearchUsers(ctx, req)
 	if err != nil {
 		kgin.Error(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// translateValidationError 翻译验证错误
+func translateValidationError(err error, translator ut.Translator) error {
+	if translator == nil {
+		return err
+	}
+
+	var errs validator.ValidationErrors
+	if errors.As(err, &errs) {
+		// 错误信息通过翻译器获取
+		translations := errs.Translate(translator)
+		var msg string
+		for _, e := range translations {
+			msg += e + ";"
+		}
+		return errors.New(msg)
+	}
+
+	return err
 }

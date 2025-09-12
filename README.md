@@ -1,6 +1,6 @@
 # Kratos Gin 代码生成器
 
-基于 Kratos 和 Gin 的现代化 Go API 代码生成器，采用模板驱动设计，支持版本化路由、智能中间件管理、自定义验证器和完整的代码脚手架生成。
+专为 Kratos 框架设计的 Gin 路由代码生成器，采用模板驱动架构，支持版本化路由、智能中间件管理、自定义验证器和完整的代码脚手架生成。
 
 ## 功能特性
 
@@ -18,6 +18,7 @@
 - 📝 **自动格式化**: 内置 `.gin` 文件格式化功能，统一代码风格
 - 🔄 **多种类型定义**: 支持 `type Name {}`、`type Name struct {}` 和 `type ()` 组语法
 - 🛠️ **模板优化**: 服务实现和中间件模板支持日志记录，提供更好的开发体验
+- 🌐 **错误翻译**: 内置验证错误翻译功能，支持国际化错误信息
 
 
 ## 快速开始
@@ -25,7 +26,7 @@
 ### 1. 安装命令行工具
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@v0.3.2
+go install github.com/YuukiKazuto/kratosgin@v0.3.3
 ```
 
 ### 2. 创建模板文件
@@ -62,7 +63,7 @@ kratosgin gen -f user.gin -s internal/service -m internal/middleware
 ### 安装
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@v0.3.2
+go install github.com/YuukiKazuto/kratosgin@v0.3.3
 ```
 
 ### 命令说明
@@ -446,6 +447,46 @@ func (m *UserMiddleware) Logging() gin.HandlerFunc {
         // 实现日志记录逻辑
         c.Next()
     }
+}
+```
+
+### 错误翻译功能
+
+生成的处理器内置了验证错误翻译功能，支持国际化错误信息：
+
+```go
+// translateValidationError 翻译验证错误
+func translateValidationError(err error, translator ut.Translator) error {
+    if translator == nil {
+        return err
+    }
+    
+    var errs validator.ValidationErrors
+    if errors.As(err, &errs) {
+        // 错误信息通过翻译器获取
+        translations := errs.Translate(translator)
+        var msg string
+        for _, e := range translations {
+            msg += e + ";"
+        }
+        return errors.New(msg)
+    }
+    
+    return err
+}
+
+// 在处理器方法中使用
+func (h *UserServiceHandler) GetUser(c *gin.Context) {
+    req := &UserReq{}
+    if err := c.ShouldBind(req); err != nil {
+        err = translateValidationError(err, h.translator)  // 自动翻译错误
+        h.log.Errorw("Struct", "UserServiceHandler", "method", "GetUser", "error", err)
+        c.JSON(http.StatusBadRequest, gin.H{
+            "message": err.Error(),
+        })
+        return
+    }
+    // ...
 }
 ```
 

@@ -3,10 +3,13 @@
 package {{.Options.PackageName}}
 
 import (
+	"errors"
 	"net/http"
 	"github.com/gin-gonic/gin"
 	"github.com/go-kratos/kratos/v2/log"
 	kgin "github.com/go-kratos/gin"
+	ut "github.com/go-playground/universal-translator"
+	"github.com/go-playground/validator/v10"
 )
 
 {{range .Services}}{{generateServiceHandlerWithGroups .}}{{end}}
@@ -14,4 +17,24 @@ import (
 {{range .RouteGroups}}{{generateRouteGroupHandler .}}{{end}}
 
 {{if .StandaloneRoutes}}{{generateStandaloneRoutesHandler .StandaloneRoutes}}{{end}}
+
+// translateValidationError 翻译验证错误
+func translateValidationError(err error, translator ut.Translator) error {
+	if translator == nil {
+		return err
+	}
+	
+	var errs validator.ValidationErrors
+	if errors.As(err, &errs) {
+		// 错误信息通过翻译器获取
+		translations := errs.Translate(translator)
+		var msg string
+		for _, e := range translations {
+			msg += e + ";"
+		}
+		return errors.New(msg)
+	}
+	
+	return err
+}
 
