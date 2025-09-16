@@ -37,8 +37,16 @@ func (g *CodeGenerator) Generate() error {
 	// 创建输出目录
 	outputDir := g.template.Options.OutputDir
 	if outputDir == "" {
-		outputDir = "api"
+		// 如果没有指定输出目录，使用当前目录
+		outputDir = "."
 	}
+
+	// 如果 outputDir 是相对路径，确保它相对于当前工作目录（gin 文件所在目录）
+	if !filepath.IsAbs(outputDir) {
+		// 相对路径直接使用，因为当前工作目录已经是 gin 文件所在目录
+		outputDir = filepath.Clean(outputDir)
+	}
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}

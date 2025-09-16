@@ -53,7 +53,7 @@ func ProcessNewTemplateWithPath(name, outputPath string) (string, error) {
 func detectPackageAndOutputDir(name, prefix string) (string, string) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return "v1", fmt.Sprintf("api/%s/v1", strings.ToLower(name))
+		return "v1", "."
 	}
 
 	// 检查当前目录结构
@@ -64,19 +64,19 @@ func detectPackageAndOutputDir(name, prefix string) (string, string) {
 	if strings.HasPrefix(dirName, "v") && len(dirName) >= 2 && isNumeric(dirName[1:]) {
 		// 如果父目录是服务名目录
 		if parentDir == strings.ToLower(name) {
-			return dirName, fmt.Sprintf("api/%s/%s", strings.ToLower(name), dirName)
+			return dirName, "."
 		}
 		// 如果当前目录就是版本目录，使用它作为包名
-		return dirName, fmt.Sprintf("api/%s/%s", strings.ToLower(name), dirName)
+		return dirName, "."
 	}
 
 	// 如果父目录是版本目录
 	if strings.HasPrefix(parentDir, "v") && len(parentDir) >= 2 && isNumeric(parentDir[1:]) {
-		return parentDir, fmt.Sprintf("api/%s/%s", strings.ToLower(name), parentDir)
+		return parentDir, "."
 	}
 
 	// 默认情况
-	return "v1", fmt.Sprintf("api/%s/v1", strings.ToLower(name))
+	return "v1", "."
 }
 
 // detectPackageAndOutputDirFromPath 根据输出路径检测包名和输出目录
@@ -99,21 +99,19 @@ func detectPackageAndOutputDirFromPath(name, outputPath, prefix string) (string,
 			versionDir = part
 			// 检查前面的部分是否是服务名
 			if i > 0 && parts[i-1] == strings.ToLower(name) {
-				// 构建输出目录：api/service/version
-				outputDir := fmt.Sprintf("api/%s/%s", strings.ToLower(name), versionDir)
-				return versionDir, outputDir
+				// 使用当前目录作为输出目录
+				return versionDir, "."
 			}
 		}
 	}
 
 	// 如果找到版本目录但没有找到服务名，使用默认结构
 	if versionDir != "" {
-		outputDir := fmt.Sprintf("api/%s/%s", strings.ToLower(name), versionDir)
-		return versionDir, outputDir
+		return versionDir, "."
 	}
 
 	// 默认情况
-	return "v1", fmt.Sprintf("api/%s/v1", strings.ToLower(name))
+	return "v1", "."
 }
 
 // detectVersionPrefix 检测当前目录的版本前缀

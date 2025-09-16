@@ -16,9 +16,10 @@
 - 📂 **灵活输出**: 支持指定输出路径，智能检测版本和包名
 - 🎨 **代码模板化**: 使用 Go 模板引擎生成代码，更优雅和可维护
 - 📝 **自动格式化**: 内置 `.gin` 文件格式化功能，统一代码风格
-- 🔄 **多种类型定义**: 支持 `type Name {}`、`type Name struct {}` 和 `type ()` 组语法
+- 🔄 **多种类型定义**: 支持 `type Name {}`、`type Name struct {}`、`type ()` 组语法和类型别名
 - 🛠️ **模板优化**: 服务实现和中间件模板支持日志记录，提供更好的开发体验
 - 🌐 **错误翻译**: 内置验证错误翻译功能，支持国际化错误信息
+- 💬 **类型注释**: 支持类型上方注释，自动保留到生成的代码中
 
 
 ## 快速开始
@@ -26,7 +27,7 @@
 ### 1. 安装命令行工具
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@v0.3.3
+go install github.com/YuukiKazuto/kratosgin@v0.3.4
 ```
 
 ### 2. 创建模板文件
@@ -63,7 +64,7 @@ kratosgin gen -f user.gin -s internal/service -m internal/middleware
 ### 安装
 
 ```bash
-go install github.com/YuukiKazuto/kratosgin@v0.3.3
+go install github.com/YuukiKazuto/kratosgin@v0.3.4
 ```
 
 ### 命令说明
@@ -166,7 +167,7 @@ info {
 }
 
 options {
-    outputDir: "api/user/v1"  // 输出目录，默认为当前目录
+    outputDir: "."            // 输出目录，默认为当前目录
     packageName: "v1"         // 包名，默认为 "v1"
 }
 
@@ -197,7 +198,7 @@ info {
 配置代码生成选项：
 ```gin
 options {
-    outputDir: "api/user/v1"  // 输出目录，相对于项目根目录
+    outputDir: "."            // 输出目录，相对于 gin 文件所在目录
     packageName: "v1"         // 生成的包名
 }
 ```
@@ -207,12 +208,28 @@ options {
 
 **单个类型定义：**
 ```gin
+// 用户请求结构体，包含用户的基本信息
 type UserRequest {
     ID       int64  `json:"id" binding:"required,min=1"`           // 必填，最小值为1
     Username string `json:"username" binding:"required,username"`  // 必填，用户名格式
     Email    string `json:"email" binding:"required,email"`        // 必填，邮箱格式
     Age      int    `json:"age" binding:"min=0,max=150"`           // 年龄范围
 }
+```
+
+**类型别名定义：**
+```gin
+// A = B 格式
+type UserID = int64
+type UserName = string
+type UserAge = int
+type UserScore = float64
+
+// A B 格式
+type AdminID int64
+type AdminName string
+type AdminAge int
+type AdminScore float64
 ```
 
 **带 struct 关键字的类型定义：**
@@ -227,27 +244,34 @@ type User struct {
 
 **类型组定义：**
 ```gin
+// 用户相关的所有类型定义
 type (
-    UserRequest {
-        ID       int64  `json:"id" binding:"required,min=1"`
-        Username string `json:"username" binding:"required,username"`
+    // 用户ID类型别名
+    UserID = int64
+    UserName = string
+    UserAge = int
+    
+    // 用户信息结构体
+    User struct {
+        ID   int64  `json:"id"`
+        Name string `json:"name"`
+        Age  int    `json:"age"`
     }
     
-    UserResponse {
-        ID       int64  `json:"id"`
-        Username string `json:"username"`
-        Email    string `json:"email"`
+    // 用户类型别名
+    Person = User
+    Admin = User
+    Manager = User
+    
+    // 创建用户请求结构体
+    CreateUserReq struct {
+        Name string `json:"name" binding:"required"`
+        Age  int    `json:"age" binding:"min=0"`
     }
     
-    ProductRequest {
-        Name  string  `json:"name" binding:"required"`
-        Price float64 `json:"price" binding:"required,min=0"`
-    }
-    
-    ProductResponse {
-        ID    int64   `json:"id"`
-        Name  string  `json:"name"`
-        Price float64 `json:"price"`
+    // 创建用户响应结构体
+    CreateUserResp struct {
+        ID int64 `json:"id"`
     }
 )
 ```
@@ -353,7 +377,9 @@ service UserService ?prefix v1 {
 
 ### 注释
 
-支持行内注释，使用 `//` 开头：
+支持行内注释和类型注释，使用 `//` 开头：
+
+**行内注释：**
 ```gin
 type UserRequest {
     ID int64 `json:"id" binding:"required"` // 用户ID，必填
@@ -361,6 +387,47 @@ type UserRequest {
     Username string `json:"username" binding:"required,username"`
 }
 ```
+
+**类型注释：**
+```gin
+// 用户请求结构体，包含用户的基本信息
+type UserRequest {
+    ID int64 `json:"id" binding:"required"`
+    Username string `json:"username" binding:"required"`
+}
+
+// 用户响应结构体，返回用户信息
+type UserResponse {
+    ID int64 `json:"id"`
+    Username string `json:"username"`
+}
+```
+
+**类型组中的注释：**
+```gin
+// 用户相关的所有类型定义
+type (
+    // 用户ID类型别名
+    UserID = int64
+    
+    // 用户信息结构体
+    User struct {
+        ID int64 `json:"id"`
+        Name string `json:"name"`
+    }
+    
+    // 创建用户请求
+    CreateUserReq struct {
+        Name string `json:"name" binding:"required"`
+    }
+)
+```
+
+**注释说明：**
+- 类型上方的注释会被保留到生成的 Go 代码中
+- 支持多行注释，会自动合并为单行
+- 类型组中每个类型可以有自己的注释
+- 如果没有类型注释，会使用默认注释
 
 ## 实现示例
 
@@ -650,7 +717,7 @@ kratosgin/
 ```gin
 options {
     packageName: v1
-    outputDir: api/user/v1
+    outputDir: .
 }
 
 // 使用类型组语法定义多个相关类型

@@ -43,8 +43,24 @@ func formatContent(content string) string {
 	processLine:
 
 		// 跳过空行和注释
-		if line == "" || strings.HasPrefix(line, "//") {
+		if line == "" {
 			formattedLines = append(formattedLines, originalLine)
+			continue
+		}
+
+		if strings.HasPrefix(line, "//") {
+			// 根据当前状态确定注释的缩进
+			var indent string
+			if inTypeGroup {
+				indent = "\t"
+			} else if inType {
+				indent = "\t"
+			} else if inService {
+				indent = "\t"
+			} else if inGroup {
+				indent = "\t\t"
+			}
+			formattedLines = append(formattedLines, indent+line)
 			continue
 		}
 
@@ -173,9 +189,16 @@ func formatContent(content string) string {
 				formattedLines = append(formattedLines, ")")
 				continue
 			}
-			// 其他内容（字段定义）需要缩进
+			// 其他内容需要缩进
 			if strings.TrimSpace(line) != "" {
-				formattedLines = append(formattedLines, "\t\t"+line)
+				// 检查是否为类型别名（包含 = 或只有两个单词）
+				if strings.Contains(line, " = ") || (len(strings.Fields(line)) == 2 && !strings.Contains(line, "{") && !strings.Contains(line, "}")) {
+					// 类型别名使用单层缩进
+					formattedLines = append(formattedLines, "\t"+line)
+				} else {
+					// 字段定义使用双层缩进
+					formattedLines = append(formattedLines, "\t\t"+line)
+				}
 			} else {
 				formattedLines = append(formattedLines, originalLine)
 			}

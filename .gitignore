@@ -20,6 +20,7 @@ go.work
 
 # IDE files
 .vscode/
+.cursorrules
 .idea/
 *.swp
 *.swo
@@ -62,3 +63,6 @@ coverage.out
 
 # Air live reload
 tmp/
+
+# Release notes (internal use only)
+RELEASE_NOTES.md

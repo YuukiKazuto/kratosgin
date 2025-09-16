@@ -25,8 +25,12 @@ type Info struct {
 
 // Type 表示数据类型定义
 type Type struct {
-	Name   string
-	Fields []Field
+	Name    string
+	Comment string // 类型上方的注释
+	Fields  []Field
+	// 类型别名相关字段
+	IsAlias bool   // 是否为类型别名
+	AliasTo string // 别名指向的类型
 }
 
 // Field 表示字段定义
@@ -100,9 +104,22 @@ func ParseGinTemplate(content string) (*GinTemplate, error) {
 	var inType bool
 	var inTypeGroup bool
 
+	var pendingComment string // 用于收集类型上方的注释
+
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "//") {
+		if line == "" {
+			continue
+		}
+
+		// 收集注释行
+		if strings.HasPrefix(line, "//") {
+			comment := strings.TrimSpace(strings.TrimPrefix(line, "//"))
+			if pendingComment == "" {
+				pendingComment = comment
+			} else {
+				pendingComment += " " + comment
+			}
 			continue
 		}
 
@@ -127,7 +144,7 @@ func ParseGinTemplate(content string) (*GinTemplate, error) {
 			// 检查是否是 type ( ) 格式
 			if strings.Contains(line, "(") {
 				// 解析 type ( xxxReq { } ) 格式
-				nextIndex, err := parseTypeGroup(lines, i, template)
+				nextIndex, err := parseTypeGroup(lines, i, template, pendingComment)
 				if err != nil {
 					return nil, err
 				}
@@ -137,6 +154,7 @@ func ParseGinTemplate(content string) (*GinTemplate, error) {
 				inType = false
 				inTypeGroup = false
 				currentType = nil
+				pendingComment = "" // 清空注释
 				continue
 			}
 
@@ -144,13 +162,48 @@ func ParseGinTemplate(content string) (*GinTemplate, error) {
 			typeName := strings.TrimSpace(strings.TrimPrefix(line, "type "))
 			// 移除可能的大括号和 struct 关键字
 			typeName = strings.TrimSpace(strings.Trim(typeName, "{}"))
+
+			// 检查是否为类型别名 (A = B 或 A B 格式)
+			if strings.Contains(typeName, " = ") {
+				// A = B 格式
+				parts := strings.Split(typeName, " = ")
+				if len(parts) == 2 {
+					aliasName := strings.TrimSpace(parts[0])
+					aliasTo := strings.TrimSpace(parts[1])
+					aliasType := &Type{
+						Name:    aliasName,
+						IsAlias: true,
+						AliasTo: aliasTo,
+						Fields:  make([]Field, 0),
+					}
+					template.Types = append(template.Types, *aliasType)
+					continue
+				}
+			} else if !strings.Contains(typeName, " struct") && !strings.Contains(typeName, "{") {
+				// A B 格式 (没有 struct 关键字和大括号)
+				parts := strings.Fields(typeName)
+				if len(parts) == 2 {
+					aliasName := strings.TrimSpace(parts[0])
+					aliasTo := strings.TrimSpace(parts[1])
+					aliasType := &Type{
+						Name:    aliasName,
+						IsAlias: true,
+						AliasTo: aliasTo,
+						Fields:  make([]Field, 0),
+					}
+					template.Types = append(template.Types, *aliasType)
+					continue
+				}
+			}
+
 			// 如果包含 struct 关键字，只取前面的部分
 			if strings.Contains(typeName, " struct") {
 				typeName = strings.TrimSpace(strings.Split(typeName, " struct")[0])
 			}
-			currentType = &Type{Name: typeName, Fields: make([]Field, 0)}
+			currentType = &Type{Name: typeName, Comment: pendingComment, Fields: make([]Field, 0)}
 			template.Types = append(template.Types, *currentType)
 			inType = true
+			pendingComment = "" // 清空注释
 			continue
 		}
 
@@ -581,7 +634,7 @@ func parseMethod(line string) (Method, error) {
 }
 
 // parseTypeGroup 解析 type ( ) 格式的类型定义组
-func parseTypeGroup(lines []string, start int, template *GinTemplate) (int, error) {
+func parseTypeGroup(lines []string, start int, template *GinTemplate, groupComment string) (int, error) {
 	// 找到 type ( 行
 	line := strings.TrimSpace(lines[start])
 	if !strings.HasPrefix(line, "type ") || !strings.Contains(line, "(") {
@@ -589,17 +642,66 @@ func parseTypeGroup(lines []string, start int, template *GinTemplate) (int, erro
 	}
 
 	// 从下一行开始解析，直到找到对应的 )
+	var currentComment string // 用于收集当前类型的注释
 	for i := start + 1; i < len(lines); i++ {
 		line := strings.TrimSpace(lines[i])
 
-		// 跳过空行和注释
-		if line == "" || strings.HasPrefix(line, "//") {
+		// 跳过空行
+		if line == "" {
+			continue
+		}
+
+		// 收集注释行
+		if strings.HasPrefix(line, "//") {
+			comment := strings.TrimSpace(strings.TrimPrefix(line, "//"))
+			if currentComment == "" {
+				currentComment = comment
+			} else {
+				currentComment += " " + comment
+			}
 			continue
 		}
 
 		// 如果遇到 )，说明类型组结束
 		if line == ")" {
 			return i, nil
+		}
+
+		// 检查是否为类型别名 (A = B 或 A B 格式)
+		if strings.Contains(line, " = ") {
+			// A = B 格式
+			parts := strings.Split(line, " = ")
+			if len(parts) == 2 {
+				aliasName := strings.TrimSpace(parts[0])
+				aliasTo := strings.TrimSpace(parts[1])
+				aliasType := &Type{
+					Name:    aliasName,
+					Comment: currentComment,
+					IsAlias: true,
+					AliasTo: aliasTo,
+					Fields:  make([]Field, 0),
+				}
+				template.Types = append(template.Types, *aliasType)
+				currentComment = "" // 清空注释
+				continue
+			}
+		} else if !strings.Contains(line, "{") && !strings.Contains(line, " struct") {
+			// A B 格式 (没有大括号和 struct 关键字)
+			parts := strings.Fields(line)
+			if len(parts) == 2 {
+				aliasName := strings.TrimSpace(parts[0])
+				aliasTo := strings.TrimSpace(parts[1])
+				aliasType := &Type{
+					Name:    aliasName,
+					Comment: currentComment,
+					IsAlias: true,
+					AliasTo: aliasTo,
+					Fields:  make([]Field, 0),
+				}
+				template.Types = append(template.Types, *aliasType)
+				currentComment = "" // 清空注释
+				continue
+			}
 		}
 
 		// 解析单个类型定义
@@ -616,12 +718,13 @@ func parseTypeGroup(lines []string, start int, template *GinTemplate) (int, erro
 				}
 
 				// 创建类型
-				currentType := &Type{Name: typeName, Fields: make([]Field, 0)}
+				currentType := &Type{Name: typeName, Comment: currentComment, Fields: make([]Field, 0)}
 
 				// 检查是否在同一行有字段定义
 				if strings.Contains(line, "{") && strings.Contains(line, "}") {
 					// 单行类型定义，没有字段
 					template.Types = append(template.Types, *currentType)
+					currentComment = "" // 清空注释
 				} else if strings.Contains(line, "{") && !strings.Contains(line, "}") {
 					// 多行类型定义，继续解析字段
 					for j := i + 1; j < len(lines); j++ {
@@ -647,6 +750,7 @@ func parseTypeGroup(lines []string, start int, template *GinTemplate) (int, erro
 						}
 					}
 					template.Types = append(template.Types, *currentType)
+					currentComment = "" // 清空注释
 				}
 			}
 		}

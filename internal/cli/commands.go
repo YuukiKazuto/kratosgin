@@ -74,6 +74,9 @@ func runGen(templateFile, serviceOutputDir, middlewareOutputDir string) {
 		fmt.Printf("gin 文件格式化完成\n")
 	}
 
+	// 获取 gin 文件所在的目录
+	ginDir := filepath.Dir(templateFile)
+
 	// 读取文件内容
 	content, err := os.ReadFile(templateFile)
 	if err != nil {
@@ -85,6 +88,23 @@ func runGen(templateFile, serviceOutputDir, middlewareOutputDir string) {
 	if err != nil {
 		log.Fatalf("解析模板失败: %v", err)
 	}
+
+	// 切换到 gin 文件所在的目录
+	originalDir, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("获取当前目录失败: %v", err)
+	}
+
+	if err := os.Chdir(ginDir); err != nil {
+		log.Fatalf("切换目录失败: %v", err)
+	}
+
+	// 确保在函数结束时恢复原目录
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			log.Printf("恢复原目录失败: %v", err)
+		}
+	}()
 
 	// 设置生成选项
 	// 如果用户指定了 service 输出目录，则生成 service 实现

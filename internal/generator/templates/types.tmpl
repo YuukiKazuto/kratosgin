@@ -3,9 +3,16 @@
 package {{.Options.PackageName}}
 
 {{range .Types}}
-// {{.Name}} 结构体
-type {{.Name}} struct {
+{{if .IsAlias}}
+{{if .Comment}}// {{.Comment}}
+{{else}}// {{.Name}} 类型别名
+{{end}}type {{.Name}} = {{.AliasTo}}
+{{else}}
+{{if .Comment}}// {{.Comment}}
+{{else}}// {{.Name}} 结构体
+{{end}}type {{.Name}} struct {
 {{range .Fields}}{{if .Name}}	{{.Name}} {{.Type}} `{{.Tag}}`{{if .Comment}} // {{.Comment}}{{end}}
 {{else}}	{{.Type}}{{if .Tag}} `{{.Tag}}`{{end}}{{if .Comment}} // {{.Comment}}{{end}}
 {{end}}{{end}}}
+{{end}}
 {{end}}
